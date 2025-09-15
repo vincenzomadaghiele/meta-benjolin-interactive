@@ -15,7 +15,45 @@ port.on("message", function (oscMessage) {
 });
 */
 
+// WebSocket connection debugging
+port.on("open", function () {
+    console.log("✅ WebSocket connection opened successfully!");
+});
+
+port.on("error", function (error) {
+    console.error("❌ WebSocket connection error:", error);
+});
+
+port.on("close", function () {
+    console.log("🔌 WebSocket connection closed");
+});
+
+console.log("🔄 Attempting to connect to WebSocket at ws://localhost:8081");
 port.open();
+
+// Listen for incoming messages from Node.js server
+port.on("message", function (oscMessage) {
+    console.log("Received OSC message:", oscMessage);
+    console.log("Message address:", oscMessage.address, "Type:", typeof oscMessage.address);
+    console.log("Address comparison:", oscMessage.address === "/drawBox");
+    
+    // Handle drawBox messages
+    if (oscMessage.address === "/drawBox") {
+        // The args are coming as plain values, not OSC-formatted objects
+        const x = oscMessage.args[0];
+        const y = oscMessage.args[1];
+        const z = oscMessage.args[2];
+        const colorHue = oscMessage.args[3];
+        const arrayIndex = oscMessage.args[4];
+        
+        console.log(`Calling drawBox with x=${x}, y=${y}, z=${z}, colorHue=${colorHue}, arrayIndex=${arrayIndex}`);
+        
+        // Call the drawBox function in main.js
+        drawBox(x, y, z, colorHue, arrayIndex);
+    } else {
+        console.log("Address did not match /drawBox");
+    }
+});
 
 // get x, y, z coordinates and play corresponding sound
 var sendBox = function (send_x, send_y, send_z){

@@ -33,6 +33,18 @@ var udp = new osc.UDPPort({
     remotePort: 6666
 });
 
+// Listen for incoming OSC messages
+udp.on("message", function (oscMessage, timeTag, info) {
+    console.log("Received OSC message:", oscMessage);
+    
+    // Log drawBox messages for debugging
+    if (oscMessage.address === "/drawBox") {
+        const [x, y, z, param4, param5] = oscMessage.args;
+        console.log(`DrawBox message received with x=${x}, y=${y}, z=${z}, param4=${param4}, param5=${param5}`);
+        console.log("Message will be relayed automatically via OSC relay");
+    }
+});
+
 udp.on("ready", function () {
     var ipAddresses = getIPAddresses();
     console.log("Listening for OSC over UDP.");
@@ -47,6 +59,7 @@ udp.open();
 var wss = new WebSocket.Server({
     port: 8081
 });
+
 
 wss.on("connection", function (socket) {
     console.log("A Web Socket connection has been established!");

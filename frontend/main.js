@@ -240,7 +240,8 @@ function calculateCurrentCompostionTime(){
 
 
 // BOX --> CIRCLE
-function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
+window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
+    console.log("drawBox", boxx, boxy, boxz, colorHue, arrayIndex)
     let compositionTime = calculateCurrentCompostionTime();
     if ( compositionTime < MAX_COMPOSITION_DURATION){
         COMPOSITION_BAR_ISFULL = false;
@@ -1995,7 +1996,10 @@ let numMeanders = 0;
 let newMeanderIndices = undefined;
 port.on("message", function (oscMessage) {
     $("#message").text(JSON.stringify(oscMessage, undefined, 2));
-    newMeanderIndices = oscMessage.args[0].split(" ");
+    
+    // Only process meander path messages, not drawBox messages
+    if (oscMessage.address === "/meanderPath" && typeof oscMessage.args[0] === "string") {
+        newMeanderIndices = oscMessage.args[0].split(" ");
     var newMeanderIndices_filtered = newMeanderIndices.filter(function (el) {
         return el != "";
       });
@@ -2039,6 +2043,7 @@ port.on("message", function (oscMessage) {
         }
         numMeanders += 1;
     }
+    } // Close the if statement for meanderPath messages
 });
 
 

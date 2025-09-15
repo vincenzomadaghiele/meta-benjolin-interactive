@@ -5,6 +5,7 @@ from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import BlockingOSCUDPServer
 import time
 import threading
+import random
 
 class LatentSpace():
     def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150):
@@ -252,9 +253,57 @@ class LatentSpace():
         self.is_playing_crossfade = False
         self.is_playing_meander = False
 
+    def getparameters_handler(self, address: str, *args):
+        print(f"Received msg on address {address} with args {args}")
+        data_dir = "./latent_param_dataset_16.npz"
+        dataset = np.load(data_dir)
+        dimensionality = 3
+        
+        print(dataset['reduced_latent_matrix'].shape)
+        print(dataset['parameter_matrix'].shape)
+        print(dataset['parameter_matrix'][0])
+        xyz_matrix = dataset['reduced_latent_matrix']
+        synthParameters_matrix = dataset['reduced_latent_matrix']
 
-def default_handler(message):
-    print(f"Unrecognised message: {message}")
+        # Convert args to integers (removes decimal points)
+        target_params = np.array(args, dtype=int)
+        print(f"Target params as integers: {target_params}")
+        
+        # Convert parameter matrix to integers if not already
+        param_matrix_int = dataset['parameter_matrix'].astype(int)
+        
+        # Find exact match
+        matches = np.all(param_matrix_int == target_params, axis=1)
+        
+        if np.any(matches):
+            row_index = np.where(matches)[0][0]
+            x, y, z = dataset['reduced_latent_matrix'][row_index]
+            print(f"Exact match found at index {row_index}")
+            print(f"Latent coordinates: x={x}, y={y}, z={z}")
+            try:
+                self.clientJS.send_message("/drawBox", [float(x), float(y), float(z), random.randint(3, 9), 0])
+                print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}")
+            except Exception as e:
+                print(f"Error sending to Node.js: {e}")
+        else:
+            print("No exact match found even after integer conversion")
+            # Fall back to closest match
+            distances = np.linalg.norm(param_matrix_int - target_params, axis=1)
+            closest_index = np.argmin(distances)
+            x, y, z = dataset['reduced_latent_matrix'][closest_index]
+            print(f"Closest match at index {closest_index}")
+            print(f"Latent coordinates: x={x}, y={y}, z={z}")
+            try:
+                self.clientJS.send_message("/drawBox", [float(x), float(y), float(z), random.randint(3, 9), 0])
+                print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}")
+            except Exception as e:
+                print(f"Error sending to Node.js: {e}")
+         
+
+
+
+def default_handler(address, *args):
+        print(f"DEFAULT {address}: {args}")
 
 
 if __name__ == "__main__":
@@ -284,6 +333,6 @@ if __name__ == "__main__":
     dispatcher.map("/stop", handler=cloud.stop_handler)
     dispatcher.map("/startrecording", handler=cloud.startrecording_handler)
     dispatcher.map("/stoprecording", handler=cloud.stoprecording_handler)
-    dispatcher.set_default_handler(default_handler)
+    dispatcher.set_default_handler(handler=cloud.getparameters_handler)
     print("Set up complete! Start playing the benjolin!")
     server.serve_forever()  # Blocks forever
