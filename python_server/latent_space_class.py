@@ -6,6 +6,7 @@ from pythonosc.osc_server import BlockingOSCUDPServer
 import time
 import threading
 import random
+from parameter_handler import ParameterHandler
 
 class LatentSpace():
     def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150):
@@ -23,6 +24,11 @@ class LatentSpace():
         self.path_cache = {}
         self.is_playing_crossfade = False
         self.is_playing_meander = False
+        # Initialize parameter handler delegation
+        self.param_handler = ParameterHandler(
+            clientJS=self.clientJS,
+            latent=self.latent
+        )
 
     def play_benjo(self):
         self.clientPd.send_message("/stop", 1)
@@ -148,7 +154,7 @@ class LatentSpace():
             return path_of_indices
         
     def play_box_handler(self, address: str, *args):
-        print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
+        #print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
         x, y, z= args[0], args[1], args[2]
         index = self.get_index_given_latent([x, y, z])
         self.set_current_point(index=index)
@@ -156,7 +162,7 @@ class LatentSpace():
         self.is_playing_meander = False
 
     def play_meander_handler(self, address: str, *args):
-        print(f'received msg: {address}, playing meander coords {args[0]:.3f}, {args[1]:.3f}, {args[2]:.3f} --> {args[3]:.3f}, {args[3]:.3f}, {args[5]:.3f} in {args[6]:.2f} s')
+        #print(f'received msg: {address}, playing meander coords {args[0]:.3f}, {args[1]:.3f}, {args[2]:.3f} --> {args[3]:.3f}, {args[3]:.3f}, {args[5]:.3f} in {args[6]:.2f} s')
         x1, y1, z1, x2, y2, z2, t = args[0], args[1], args[2], args[3], args[4], args[5], int(args[6])
         path_of_indices = self.get_meander(x1, y1, z1, x2, y2, z2)
         length = path_of_indices.shape[0]
@@ -181,7 +187,7 @@ class LatentSpace():
             time.sleep(time_per_point)
 
     def play_crossfade_handler(self, address: str, *args):
-        print(f'received msg: {address}, playing crossfade coords {args[0]:.3f}, {args[1]:.3f} {args[2]:.3f} --> {args[3]:.3f}, {args[4]:.3f}, {args[5]:.3f} in {args[6]:.2f} s')
+        #print(f'received msg: {address}, playing crossfade coords {args[0]:.3f}, {args[1]:.3f} {args[2]:.3f} --> {args[3]:.3f}, {args[4]:.3f}, {args[5]:.3f} in {args[6]:.2f} s')
         x1, y1, z1, x2, y2, z2, t = args[0], args[1], args[2], args[3], args[4], args[5], int(args[6])
         idx1 = self.get_index_given_latent([x1, y1, z1])
         idx2 = self.get_index_given_latent([x2, y2, z2])
@@ -209,7 +215,7 @@ class LatentSpace():
             time.sleep(time_per_point)
 
     def drawMeander_handler(self, address: str, *args):
-        print(f'received msg: {address}, sending draw meander coords {args[0]:.3f}, {args[1]:.3f} --> {args[2]:.3f}, {args[3]:.3f}')
+        #print(f'received msg: {address}, sending draw meander coords {args[0]:.3f}, {args[1]:.3f} --> {args[2]:.3f}, {args[3]:.3f}')
         x1, y1, z1, x2, y2, z2 = args[0], args[1], args[2], args[3], args[4], args[5]
         path_of_indices = self.get_meander(x1, y1, z1, x2, y2, z2)
         path_of_latents = self.latent[path_of_indices, :]
@@ -226,8 +232,8 @@ class LatentSpace():
         for point_coords in path_of_latents:
             path_message += ' '.join([str(coord) for coord in point_coords])
             path_message += ' '
-            print(point_coords)
-        print(path_message)
+            #print(point_coords)
+        # print(path_message)
 
         # the code below is the old one
         # path_of_latents = self.parameter[path_of_indices, :]
@@ -236,68 +242,25 @@ class LatentSpace():
         self.clientJS.send_message("/meanderPath", path_message)
 
     def stop_handler(self, address: str):
-        print(f'received msg: {address}')
+        # print(f'received msg: {address}')
         self.stop_benjo()
         self.is_playing_crossfade = False
         self.is_playing_meander = False
 
     def startrecording_handler(self, address: str):
-        print(f'received msg: {address}')
+        #(f'received msg: {address}')
         self.start_recording()
         self.is_playing_crossfade = False
         self.is_playing_meander = False
 
     def stoprecording_handler(self, address: str):
-        print(f'received msg: {address}')
+        #print(f'received msg: {address}')
         self.stop_recording()
         self.is_playing_crossfade = False
         self.is_playing_meander = False
 
     def getparameters_handler(self, address: str, *args):
-        print(f"Received msg on address {address} with args {args}")
-        data_dir = "./latent_param_dataset_16.npz"
-        dataset = np.load(data_dir)
-        dimensionality = 3
-        
-        print(dataset['reduced_latent_matrix'].shape)
-        print(dataset['parameter_matrix'].shape)
-        print(dataset['parameter_matrix'][0])
-        xyz_matrix = dataset['reduced_latent_matrix']
-        synthParameters_matrix = dataset['reduced_latent_matrix']
-
-        # Convert args to integers (removes decimal points)
-        target_params = np.array(args, dtype=int)
-        print(f"Target params as integers: {target_params}")
-        
-        # Convert parameter matrix to integers if not already
-        param_matrix_int = dataset['parameter_matrix'].astype(int)
-        
-        # Find exact match
-        matches = np.all(param_matrix_int == target_params, axis=1)
-        
-        if np.any(matches):
-            row_index = np.where(matches)[0][0]
-            x, y, z = dataset['reduced_latent_matrix'][row_index]
-            print(f"Exact match found at index {row_index}")
-            print(f"Latent coordinates: x={x}, y={y}, z={z}")
-            try:
-                self.clientJS.send_message("/drawBox", [float(x), float(y), float(z), random.randint(3, 9), 0])
-                print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}")
-            except Exception as e:
-                print(f"Error sending to Node.js: {e}")
-        else:
-            print("No exact match found even after integer conversion")
-            # Fall back to closest match
-            distances = np.linalg.norm(param_matrix_int - target_params, axis=1)
-            closest_index = np.argmin(distances)
-            x, y, z = dataset['reduced_latent_matrix'][closest_index]
-            print(f"Closest match at index {closest_index}")
-            print(f"Latent coordinates: x={x}, y={y}, z={z}")
-            try:
-                self.clientJS.send_message("/drawBox", [float(x), float(y), float(z), random.randint(3, 9), 0])
-                print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}")
-            except Exception as e:
-                print(f"Error sending to Node.js: {e}")
+        return self.param_handler.getparameters_handler(address, *args)
          
 
 

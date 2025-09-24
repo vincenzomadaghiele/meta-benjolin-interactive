@@ -134,6 +134,64 @@ function graphicsOnResize() {
 
 }
 
+// Persistent markers for each Box element
+let boxMarkers = [];
+function createMarkerPoint(px, py, pz) {
+    // Reuse sprite material for consistency
+    const sprite = new THREE.TextureLoader().load('imgs/disc.png');
+    sprite.colorSpace = THREE.SRGBColorSpace;
+    const dotGeometry = new THREE.BufferGeometry();
+    dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([px, py, pz]), 3));
+    const dotMaterial = new THREE.PointsMaterial({ size: 8, sizeAttenuation: true, map: sprite, alphaTest: 0.5, transparent: false });
+    dotMaterial.color.setHSL(0.15, 0.9, 0.8, THREE.SRGBColorSpace);
+    return new THREE.Points(dotGeometry, dotMaterial);
+}
+
+function addBoxMarkerForIndex(idx, x, y, z) {
+    if (typeof scene === 'undefined' || !scene) return;
+    // Remove existing marker for this index
+    if (boxMarkers[idx]) {
+        try { scene.remove(boxMarkers[idx]); } catch (e) {}
+    }
+    const px = Number(x) * scale_x - (scale_x/2);
+    const py = Number(y) * scale_y - (scale_y/2);
+    const pz = Number(z) * scale_z - (scale_z/2);
+    const marker = createMarkerPoint(px, py, pz);
+    scene.add(marker);
+    boxMarkers[idx] = marker;
+}
+
+// Draw a point (cursor) at given latent coordinates (0..1), replacing any existing cursor
+window.drawPointAt = function drawPointAt(x, y, z, _tries = 20) {
+    // Ensure the 3D scene and helpers are initialized before drawing
+    const ready = (typeof scene !== 'undefined' && scene &&
+                   typeof createCursor === 'function' &&
+                   typeof scale_x !== 'undefined' &&
+                   typeof scale_y !== 'undefined' &&
+                   typeof scale_z !== 'undefined');
+    if (!ready) {
+        if (_tries > 0) {
+            setTimeout(() => drawPointAt(x, y, z, _tries - 1), 100);
+        } else {
+            console.warn('drawPointAt: scene not ready; gave up drawing point.');
+        }
+        return;
+    }
+
+    try {
+        if (typeof window.cursor !== 'undefined' && window.cursor) {
+            scene.remove(window.cursor);
+        }
+    } catch (e) {
+        // ignore
+    }
+    let cx = Number(x) * scale_x - (scale_x/2);
+    let cy = Number(y) * scale_y - (scale_y/2);
+    let cz = Number(z) * scale_z - (scale_z/2);
+    window.cursor = createCursor(cx, cy, cz);
+    scene.add(window.cursor);
+}
+
 // TIMELINE CURSOR 
 let verticalAnimationTimeouts = [];
 var timeline_vertical_cursor_global = undefined;
@@ -242,40 +300,37 @@ function calculateCurrentCompostionTime(){
 // BOX --> CIRCLE
 window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
     console.log("drawBox", boxx, boxy, boxz, colorHue, arrayIndex)
-    let compositionTime = calculateCurrentCompostionTime();
-    if ( compositionTime < MAX_COMPOSITION_DURATION){
-        COMPOSITION_BAR_ISFULL = false;
+    // Always allow adding boxes; no composition duration limit
+    let newBox = document.createElement("div");
+    newBox.id = "box "+numBoxes;
+    newBox.className = 'box';
 
-        let newBox = document.createElement("div");
-        newBox.id = "box "+numBoxes;
-        newBox.className = 'box';
+    // put out of draw box
+    document.getElementById("composition-bar").appendChild(newBox); 
 
-        // put out of draw box
-        document.getElementById("composition-bar").appendChild(newBox); 
+    let boxStartHeight = timesToPxHeight( BASIC_ELEMENT_T );
+    var R = Raphael("box "+numBoxes, COMPOSITION_BAR_WIDTH_PX, boxStartHeight + MARGIN_PX );
+    var s = R.circle( COMPOSITION_BAR_WIDTH_PX/2 , (boxStartHeight + MARGIN_PX) / 2 , boxStartHeight / 2 ).attr({
+            fill: "hsb("+colorHue+", .5, .5)",
+            stroke: "none",
+            opacity: .3
+        });
+    var c = R.circle( COMPOSITION_BAR_WIDTH_PX/2 , (boxStartHeight + MARGIN_PX) / 2 , boxStartHeight / 2 ).attr({
+            fill: "none",
+            stroke: "hsb("+colorHue+", 1, 1)",
+            "stroke-width": 8,
+            opacity: 0.3
+        });
+    c.sized = s;
+    c.parentDiv = document.getElementById(newBox.id);
+    c.raph = R;
+    c.drag(move, start, up);
+    s.outer = c;
 
-        let boxStartHeight = timesToPxHeight( BASIC_ELEMENT_T );
-        var R = Raphael("box "+numBoxes, COMPOSITION_BAR_WIDTH_PX, boxStartHeight + MARGIN_PX );
-        var s = R.circle( COMPOSITION_BAR_WIDTH_PX/2 , (boxStartHeight + MARGIN_PX) / 2 , boxStartHeight / 2 ).attr({
-                fill: "hsb("+colorHue+", .5, .5)",
-                stroke: "none",
-                opacity: .3
-            });
-        var c = R.circle( COMPOSITION_BAR_WIDTH_PX/2 , (boxStartHeight + MARGIN_PX) / 2 , boxStartHeight / 2 ).attr({
-                fill: "none",
-                stroke: "hsb("+colorHue+", 1, 1)",
-                "stroke-width": 8,
-                opacity: 0.3
-            });
-        c.sized = s;
-        c.parentDiv = document.getElementById(newBox.id);
-        c.raph = R;
-        c.drag(move, start, up);
-        s.outer = c;
+    newBox.draggable = 'true';
 
-        newBox.draggable = 'true';
-
-        // HOVER INTERACTION
-        newBox.addEventListener("mouseover", (event) => {
+    // HOVER INTERACTION
+    newBox.addEventListener("mouseover", (event) => {
             if ( !ISPLAYBACKON ){
                 let item_index = Number(newBox.id.split(" ")[1])
                 highlightBox( item_index );
@@ -285,9 +340,9 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
                 event.target.style["cursor"] = "default";
                 textlog.innerHTML="Single element selection is disabled during playback.";
             }
-        }); 
-        // CLICK INTERACTION
-        newBox.addEventListener("click", (event) => {
+    }); 
+    // CLICK INTERACTION
+    newBox.addEventListener("click", (event) => {
             if ( !ISPLAYBACKON ){
                 for (var i = 0; i < singlePlaybackTimeouts.length; i++) {
                     clearTimeout(singlePlaybackTimeouts[i]);
@@ -310,27 +365,31 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
             } else {
                 textlog.innerHTML="Single element selection is disabled during playback.";
             }
-        }); 
-        // DRAG AND DROP INTERACTION
-        newBox.addEventListener('dragstart', dragStart);
-        newBox.addEventListener('dragenter', dragEnter)
-        newBox.addEventListener('dragover', dragOver);
-        newBox.addEventListener('dragleave', dragLeave);
-        newBox.addEventListener('drop', drop);
+    }); 
+    // DRAG AND DROP INTERACTION
+    newBox.addEventListener('dragstart', dragStart);
+    newBox.addEventListener('dragenter', dragEnter)
+    newBox.addEventListener('dragover', dragOver);
+    newBox.addEventListener('dragleave', dragLeave);
+    newBox.addEventListener('drop', drop);
 
-        var duration = pxHeightToTimesMs(boxStartHeight); 
-        compositionArray.push(new Box(boxx, boxy, boxz, duration, arrayIndex));
+    var duration = pxHeightToTimesMs(boxStartHeight); 
+    compositionArray.push(new Box(boxx, boxy, boxz, duration, arrayIndex));
 
-        numBoxes += 1;
-        raphaels.push(R);
+    numBoxes += 1;
+    raphaels.push(R);
 
-        let compositionTime = calculateCurrentCompostionTime();
-        if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
+    // Add a persistent 3D marker for this box
+    const thisIndex = numBoxes - 1;
+    addBoxMarkerForIndex(thisIndex, boxx, boxy, boxz);
 
-    } else {
-        COMPOSITION_BAR_ISFULL = true;
-    }
+    // No composition bar fullness updates; unlimited elements
     renderPath();
+
+    // Also draw a transient cursor point at the same coordinates in the 3D scene
+    if (typeof drawPointAt === 'function') {
+        drawPointAt(boxx, boxy, boxz);
+    }
 }
 // CIRCLE INTERACTIONS
 var start = function () {
@@ -371,17 +430,21 @@ var up = function () {
         this.sized.attr({opacity: .8 });
         let compositionIndex = Number(this.parentDiv.id.split(" ")[1]);
         compositionArray[compositionIndex].duration = pxHeightToTimesMs(this.attr("r"));
-
-        let compositionTime = calculateCurrentCompostionTime();
-        if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
     }
 }
 
 // CROSSFADE
-function drawCrossfade(){
+window.drawCrossfade = function drawCrossfade(){
     let compositionTime = calculateCurrentCompostionTime();
-    if ( compositionTime < MAX_COMPOSITION_DURATION){
-        COMPOSITION_BAR_ISFULL = false;
+    // Require at least one Box to exist and be last before drawing a crossfade
+    if (compositionArray.length === 0) {
+        console.log("Cannot create crossfade: No boxes exist yet. Create a box first.");
+        return;
+    }
+    if (!(compositionArray[compositionArray.length - 1] instanceof Box)) {
+        console.log("Cannot create crossfade: Last element is not a box. Crossfade must be placed between boxes.");
+        return;
+    }
 
         let newBox = document.createElement("div");
         newBox.id = "box "+numBoxes;
@@ -463,12 +526,6 @@ function drawCrossfade(){
         numBoxes += 1;
         raphaels.push(R);
 
-        let compositionTime = calculateCurrentCompostionTime();
-        if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
-
-    } else {
-        COMPOSITION_BAR_ISFULL = true;
-    }
     renderPath();
 }
 // CROSSFADE INTERACTIONS
@@ -499,17 +556,22 @@ var up_crossfade = function () {
         this.attr({opacity: 0.3});
         let compositionIndex = Number(this.parentDiv.id.split(" ")[1]);
         compositionArray[compositionIndex].duration = pxHeightToTimesMs(this.attr("cy"));
-        let compositionTime = calculateCurrentCompostionTime();
-        if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
 
     }
 };
 
 
-function drawMeander(){
+window.drawMeander = function drawMeander(){
     let compositionTime = calculateCurrentCompostionTime();
-    if ( compositionTime < MAX_COMPOSITION_DURATION){
-        COMPOSITION_BAR_ISFULL = false;
+    // Require at least one Box to exist and be last before drawing a meander
+    if (compositionArray.length === 0) {
+        console.log("Cannot create meander: No boxes exist yet. Create a box first.");
+        return;
+    }
+    if (!(compositionArray[compositionArray.length - 1] instanceof Box)) {
+        console.log("Cannot create meander: Last element is not a box. Meander must be placed between boxes.");
+        return;
+    }
 
         let newBox = document.createElement("div");
         newBox.id = "box "+numBoxes;
@@ -617,12 +679,6 @@ function drawMeander(){
         numBoxes += 1;
         raphaels.push(R);
 
-        let compositionTime = calculateCurrentCompostionTime();
-        if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
-
-    } else {
-        COMPOSITION_BAR_ISFULL = true;
-    }
     renderPath();
 }
 
@@ -661,8 +717,6 @@ var up_meander = function () {
         this.attr({opacity: 0.3});
         let compositionIndex = Number(this.parentDiv.id.split(" ")[1]);
         compositionArray[compositionIndex].duration = pxHeightToTimesMs(this.attr("cy"));
-        let compositionTime = calculateCurrentCompostionTime();
-        if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
     }
 };
 
@@ -989,13 +1043,18 @@ function removeElement(element_index){
     }
     if (compositionArray[element_index] instanceof Box){
         pointToBasic(compositionArray[element_index].arrayIndex);
-        // remove scatterplot element
+        // remove 3D persistent marker for this box
+        if (boxMarkers[element_index]) {
+            try { scene.remove(boxMarkers[element_index]); } catch (e) {}
+        }
     }
     // remove item from composition array
     //let comp_index = Number(id_draggable.split(' ')[1]);
     compositionArray.splice(element_index, 1);
     // remove raphael item from canvas array
     raphaels.splice(element_index, 1);
+    // keep markers array in sync with indices
+    boxMarkers.splice(element_index, 1);
     console.log("composition: ", compositionArray);
     // update visualization
     renderPath();

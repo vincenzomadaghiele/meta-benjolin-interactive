@@ -5,6 +5,18 @@ var port = new osc.WebSocketPort({
 /*
 let MEANDERS_LIST = [];
 let newMeanderIndices = undefined;
+function callDrawPointAtWithRetry(x, y, z, tries = 30, delayMs = 100) {
+    if (typeof drawPointAt === 'function') {
+        try { drawPointAt(x, y, z); } catch (e) { console.warn('drawPointAt failed:', e); }
+        return;
+    }
+    if (tries > 0) {
+        setTimeout(() => callDrawPointAtWithRetry(x, y, z, tries - 1, delayMs), delayMs);
+    } else {
+        console.warn('drawPointAt not available after retries; skipping point draw');
+    }
+}
+
 port.on("message", function (oscMessage) {
     $("#message").text(JSON.stringify(oscMessage, undefined, 2));
     MEANDERS_LIST.push(oscMessage.args[0].split("-"));
@@ -31,6 +43,19 @@ port.on("close", function () {
 console.log("🔄 Attempting to connect to WebSocket at ws://localhost:8081");
 port.open();
 
+// Helper to ensure drawPointAt is called even if main.js isn't ready yet
+function callDrawPointAtWithRetry(x, y, z, tries = 30, delayMs = 100) {
+    if (typeof drawPointAt === 'function') {
+        try { drawPointAt(x, y, z); } catch (e) { console.warn('drawPointAt failed:', e); }
+        return;
+    }
+    if (tries > 0) {
+        setTimeout(() => callDrawPointAtWithRetry(x, y, z, tries - 1, delayMs), delayMs);
+    } else {
+        console.warn('drawPointAt not available after retries; skipping point draw');
+    }
+}
+
 // Listen for incoming messages from Node.js server
 port.on("message", function (oscMessage) {
     console.log("Received OSC message:", oscMessage);
@@ -50,8 +75,16 @@ port.on("message", function (oscMessage) {
         
         // Call the drawBox function in main.js
         drawBox(x, y, z, colorHue, arrayIndex);
+        // Also draw a point at the same coordinates in the 3D scene (retry if main.js not ready yet)
+        callDrawPointAtWithRetry(x, y, z);
+    } else if (oscMessage.address === "/drawCrossfade") {
+        console.log("Received drawCrossfade message");
+        drawCrossfade();
+    } else if (oscMessage.address === "/drawMeander") {
+        console.log("Received drawMeander message");
+        drawMeander();
     } else {
-        console.log("Address did not match /drawBox");
+        console.log("Address did not match with any handler" + oscMessage.address);
     }
 });
 
