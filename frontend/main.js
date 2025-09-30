@@ -9,67 +9,84 @@ const TIME_TO_POINTSIZE = 0.003;
 let raphaels = [];
 
 
-// DRAW TIMELINE
-var verticaltimelineheight = window.innerHeight - (90 + 60 + 20);
-var R_timeline = Raphael("timeline", 100, verticaltimelineheight );
-var path_timeline = R_timeline.path("M25 0L25 "+(verticaltimelineheight)).attr({
-    stroke: '#FFFFFF',
-    'stroke-width': 1,
-    'arrow-end':'classic-wide-long',
-    opacity: 0.5
-});
-var timeline_pathArray = path_timeline.attr("path");
-window.addEventListener( 'resize', graphicsOnResize );
+// DRAW TIMELINE (guarded to allow disabling the timeline UI)
+const TIMELINE_ENABLED = !!document.getElementById('timeline');
+let R_timeline, path_timeline, timeline_pathArray;
+let verticaltimelineheight = window.innerHeight - (90 + 60 + 20);
+let marker1_text, marker1_path, marker12_path, marker12_pathArray,
+    marker2_text, marker2_path, marker2_pathArray,
+    marker22_path, marker22_pathArray,
+    marker3_text, marker3_path, marker3_pathArray,
+    marker32_path, marker32_pathArray,
+    marker4_text, marker4_path, marker4_pathArray,
+    marker42_path, marker42_pathArray,
+    marker5_text, marker5_path, marker5_pathArray,
+    marker52_path, marker52_pathArray,
+    marker6_text, marker6_path, marker6_pathArray,
+    marker62_path, marker62_pathArray,
+    marker7_text, marker7_path, marker7_pathArray;
 
+if (TIMELINE_ENABLED) {
+    R_timeline = Raphael("timeline", 100, verticaltimelineheight );
+    path_timeline = R_timeline.path("M25 0L25 "+(verticaltimelineheight)).attr({
+        stroke: '#FFFFFF',
+        'stroke-width': 1,
+        'arrow-end':'classic-wide-long',
+        opacity: 0.5
+    });
+    timeline_pathArray = path_timeline.attr("path");
+    window.addEventListener( 'resize', graphicsOnResize );
 
-var marker1_text = R_timeline.text(43, 10, "0 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker1_path = R_timeline.path( "M15 0L35 0 ").attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker1_text = R_timeline.text(43, 10, "0 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker1_path = R_timeline.path( "M15 0L35 0 ").attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
 
-var marker12_path = R_timeline.path( "M20 "+(verticaltimelineheight/12)+"L30 "+(verticaltimelineheight/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker12_pathArray = marker12_path.attr("path");
+    marker12_path = R_timeline.path( "M20 "+(verticaltimelineheight/12)+"L30 "+(verticaltimelineheight/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker12_pathArray = marker12_path.attr("path");
 
-var marker2_text = R_timeline.text(43, verticaltimelineheight/6, "10 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker2_path = R_timeline.path( "M20 "+(verticaltimelineheight/6)+"L30 "+(verticaltimelineheight/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker2_pathArray = marker2_path.attr("path");
+    marker2_text = R_timeline.text(43, verticaltimelineheight/6, "10 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker2_path = R_timeline.path( "M20 "+(verticaltimelineheight/6)+"L30 "+(verticaltimelineheight/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker2_pathArray = marker2_path.attr("path");
 
-var marker22_path = R_timeline.path( "M20 "+(verticaltimelineheight*3/12)+"L30 "+(verticaltimelineheight*3/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker22_pathArray = marker22_path.attr("path");
+    marker22_path = R_timeline.path( "M20 "+(verticaltimelineheight*3/12)+"L30 "+(verticaltimelineheight*3/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker22_pathArray = marker22_path.attr("path");
 
-var marker3_text = R_timeline.text(43, verticaltimelineheight/6*2-10, "20 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker3_path = R_timeline.path( "M15 "+(verticaltimelineheight*2/6)+"L35 "+(verticaltimelineheight*2/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker3_pathArray = marker3_path.attr("path");
+    marker3_text = R_timeline.text(43, verticaltimelineheight/6*2-10, "20 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker3_path = R_timeline.path( "M15 "+(verticaltimelineheight*2/6)+"L35 "+(verticaltimelineheight*2/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker3_pathArray = marker3_path.attr("path");
 
-var marker32_path = R_timeline.path( "M20 "+(verticaltimelineheight*5/12)+"L30 "+(verticaltimelineheight*5/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker32_pathArray = marker32_path.attr("path");
+    marker32_path = R_timeline.path( "M20 "+(verticaltimelineheight*5/12)+"L30 "+(verticaltimelineheight*5/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker32_pathArray = marker32_path.attr("path");
 
-var marker4_text = R_timeline.text(43, verticaltimelineheight/6*3, "30 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker4_path = R_timeline.path( "M20 "+(verticaltimelineheight*3/6)+"L30 "+(verticaltimelineheight*3/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker4_pathArray = marker4_path.attr("path");
+    marker4_text = R_timeline.text(43, verticaltimelineheight/6*3, "30 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker4_path = R_timeline.path( "M20 "+(verticaltimelineheight*3/6)+"L30 "+(verticaltimelineheight*3/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker4_pathArray = marker4_path.attr("path");
 
-var marker42_path = R_timeline.path( "M20 "+(verticaltimelineheight*7/12)+"L30 "+(verticaltimelineheight*7/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker42_pathArray = marker42_path.attr("path");
+    marker42_path = R_timeline.path( "M20 "+(verticaltimelineheight*7/12)+"L30 "+(verticaltimelineheight*7/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker42_pathArray = marker42_path.attr("path");
 
-var marker5_text = R_timeline.text(43, verticaltimelineheight/6*4-10, "40 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker5_path = R_timeline.path( "M15 "+(verticaltimelineheight*4/6)+"L35 "+(verticaltimelineheight*4/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker5_pathArray = marker5_path.attr("path");
+    marker5_text = R_timeline.text(43, verticaltimelineheight/6*4-10, "40 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker5_path = R_timeline.path( "M15 "+(verticaltimelineheight*4/6)+"L35 "+(verticaltimelineheight*4/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker5_pathArray = marker5_path.attr("path");
 
-var marker52_path = R_timeline.path( "M20 "+(verticaltimelineheight*9/12)+"L30 "+(verticaltimelineheight*9/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker52_pathArray = marker52_path.attr("path");
+    marker52_path = R_timeline.path( "M20 "+(verticaltimelineheight*9/12)+"L30 "+(verticaltimelineheight*9/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker52_pathArray = marker52_path.attr("path");
 
-var marker6_text = R_timeline.text(43, verticaltimelineheight/6*5, "50 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker6_path = R_timeline.path( "M20 "+(verticaltimelineheight*5/6)+"L30 "+(verticaltimelineheight*5/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker6_pathArray = marker6_path.attr("path");
+    marker6_text = R_timeline.text(43, verticaltimelineheight/6*5, "50 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker6_path = R_timeline.path( "M20 "+(verticaltimelineheight*5/6)+"L30 "+(verticaltimelineheight*5/6)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker6_pathArray = marker6_path.attr("path");
 
-var marker62_path = R_timeline.path( "M20 "+(verticaltimelineheight*11/12)+"L30 "+(verticaltimelineheight*11/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker62_pathArray = marker62_path.attr("path");
+    marker62_path = R_timeline.path( "M20 "+(verticaltimelineheight*11/12)+"L30 "+(verticaltimelineheight*11/12)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker62_pathArray = marker62_path.attr("path");
 
-var marker7_text = R_timeline.text(43, verticaltimelineheight-25, "60 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
-var marker7_path = R_timeline.path( "M15 "+(verticaltimelineheight-10)+"L35 "+(verticaltimelineheight-10)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
-var marker7_pathArray = marker7_path.attr("path");
+    marker7_text = R_timeline.text(43, verticaltimelineheight-25, "60 s").attr({fill: '#FFFFFF', stroke: '#FFFFFF', 'font-size':10, opacity: 0.5});
+    marker7_path = R_timeline.path( "M15 "+(verticaltimelineheight-10)+"L35 "+(verticaltimelineheight-10)).attr({stroke: '#FFFFFF','stroke-width': 1.2, opacity: 0.5});
+    marker7_pathArray = marker7_path.attr("path");
+}
 
 
 // UPDATE WINDOW SIZE
 function graphicsOnResize() {
+    if (!TIMELINE_ENABLED) return;
     // update timeline
     let new_timeline_height = window.innerHeight - (90 + 60 + 20);
     R_timeline.setSize(100, new_timeline_height);
@@ -196,6 +213,7 @@ window.drawPointAt = function drawPointAt(x, y, z, _tries = 20) {
 let verticalAnimationTimeouts = [];
 var timeline_vertical_cursor_global = undefined;
 function animateTimelineCursor( start_y, stop_y, animation_time ){
+    if (!TIMELINE_ENABLED) return;
     var timeline_vertical_cursor = R_timeline.circle( 25, start_y, 8 ).attr({
         fill: "#FFFFFF",
         "stroke-width": 10,
@@ -220,7 +238,9 @@ function animateTimelineCursor( start_y, stop_y, animation_time ){
         verticalAnimationTimeouts.push(animationCursorTimeout);
     }
     var animationCursorTimeout = setTimeout(function() {
-        timeline_vertical_cursor.remove();
+        if (timeline_vertical_cursor && typeof timeline_vertical_cursor.remove === 'function') {
+            timeline_vertical_cursor.remove();
+        }
         //timeline_vertical_cursor_global.remove();
     }, cursortime );
     verticalAnimationTimeouts.push(animationCursorTimeout);
@@ -298,7 +318,38 @@ function calculateCurrentCompostionTime(){
 
 
 // BOX --> CIRCLE
-window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
+function updatPreviousBoxDurationAndHeight(newDurationMs){
+    const indexToUpdate = compositionArray.length > 3 ? compositionArray.length - 3 : 0;
+    // Update model
+    compositionArray[indexToUpdate].duration = newDurationMs;
+    // Recompute height in px
+    const newHeight = timesToPxHeight(newDurationMs);
+    // Update DOM container height
+    const div = document.getElementById('box '+ indexToUpdate);
+    if (div) {
+        div.style["height"] = (newHeight + MARGIN_PX) + 'px';
+    }
+    // Update Raphael paper size and circles
+    const paper = raphaels[indexToUpdate];
+    if (paper) {
+        paper.setSize(COMPOSITION_BAR_WIDTH_PX, newHeight + MARGIN_PX);
+        const newr = newHeight / 2;
+        paper.forEach(function(el){
+            if (el && el.type === 'circle'){
+                el.attr({ r: newr, cy: (newHeight + MARGIN_PX) / 2 });
+            }
+        });
+    }
+    // Update scatterplot point size to reflect new duration
+    try {
+        if (typeof changePointSize === 'function') {
+            // changePointSize expects diameter in px (same value used in drag handler)
+            changePointSize(indexToUpdate, newHeight);
+        }
+    } catch (e) { /* no-op */ }
+}
+
+window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevElapsedSec){
     console.log("drawBox", boxx, boxy, boxz, colorHue, arrayIndex)
     // Always allow adding boxes; no composition duration limit
     let newBox = document.createElement("div");
@@ -355,7 +406,9 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
                 }
                 for (var i = 0; i < verticalAnimationTimeouts.length; i++) {
                     clearTimeout(verticalAnimationTimeouts[i]);
-                    timeline_vertical_cursor_global.remove();
+                    if (timeline_vertical_cursor_global && typeof timeline_vertical_cursor_global.remove === 'function') {
+                        timeline_vertical_cursor_global.remove();
+                    }
                 }
                 let item_index = Number(newBox.id.split(" ")[1])
                 SELECTED_ELEMENT = item_index;
@@ -389,6 +442,13 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex){
     // Also draw a transient cursor point at the same coordinates in the 3D scene
     if (typeof drawPointAt === 'function') {
         drawPointAt(boxx, boxy, boxz);
+    }
+    // If we received elapsed seconds for the previous box, update its duration
+    if (typeof prevElapsedSec !== 'undefined' && prevElapsedSec != null && prevElapsedSec >= 0){
+        const prevIndex = numBoxes - 2; // previous element index after increment
+        if (prevIndex >= 0) {
+            updatPreviousBoxDurationAndHeight(Number(prevElapsedSec) * 1000);
+        }
     }
 }
 // CIRCLE INTERACTIONS
@@ -1138,7 +1198,9 @@ function disableAllInteractions(){
     }
     for (var i = 0; i < verticalAnimationTimeouts.length; i++) {
         clearTimeout(verticalAnimationTimeouts[i]);
-        timeline_vertical_cursor_global.remove();
+        if (timeline_vertical_cursor_global && typeof timeline_vertical_cursor_global.remove === 'function') {
+            timeline_vertical_cursor_global.remove();
+        }
     }
 }
 

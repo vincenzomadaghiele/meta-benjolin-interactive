@@ -11,6 +11,8 @@ class ParameterHandler:
 
 
         self.clientJS = clientJS
+        # Track last time we sent a drawBox to compute elapsed duration for previous box
+        self._last_drawbox_time = None
 
         # Visualization change speed tracking
         self.prev_draw_coords = None
@@ -118,9 +120,19 @@ class ParameterHandler:
                 # First draw; treat as slow/meander by default
                 self.clientJS.send_message("/drawMeander", "")
 
-            # Draw the box at the normalized coordinates
-            self.clientJS.send_message("/drawBox", [x_n, y_n, z_n, random.randint(3, 9), 0])
-            print(f"Sent drawBox message to Node.js (normalized): x={x_n}, y={y_n}, z={z_n}")
+            # Compute elapsed seconds since last drawBox
+            import time
+            now = time.time()
+            elapsed_prev_sec = None
+            if self._last_drawbox_time is not None:
+                elapsed_prev_sec = float(now - self._last_drawbox_time)
+            self._last_drawbox_time = now
+
+            # Draw the box at the normalized coordinates and include elapsed_prev_sec for previous box
+            # If elapsed_prev_sec is None, send -1 to indicate unknown (first box)
+            elapsed_arg = elapsed_prev_sec if elapsed_prev_sec is not None else -1.0
+            self.clientJS.send_message("/drawBox", [x_n, y_n, z_n, random.randint(3, 9), 0, elapsed_arg])
+            print(f"Sent drawBox message to Node.js (normalized): x={x_n}, y={y_n}, z={z_n}, prev_elapsed={elapsed_arg}")
             # Update previous draw coordinates using normalized values
             self.prev_draw_coords = [x_n, y_n, z_n]
         except Exception as e:
