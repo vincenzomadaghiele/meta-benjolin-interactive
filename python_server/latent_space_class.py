@@ -7,6 +7,11 @@ import time
 import threading
 import random
 from parameter_handler import ParameterHandler
+import os
+from sklearn.cluster import DBSCAN
+import matplotlib.cm as cm
+from matplotlib.colors import to_hex
+import json
 
 class LatentSpace():
     def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150):
@@ -261,7 +266,142 @@ class LatentSpace():
 
     def getparameters_handler(self, address: str, *args):
         return self.param_handler.getparameters_handler(address, *args)
-         
+
+    def trainDatasetWithColors(self):
+        """
+        Train clustering on a 3D dataset using DBSCAN and export colors per point.
+        
+        Load order:
+        1) './dataset3D copy.csv'
+        2) './latent_param_dataset_16.npz'
+        3) Fallback: use self.latent
+        
+        Output: './dataset_with_colors.csv' with columns: x,y,z,color
+        """
+        input_csv = os.path.join(".", "dataset3D copy.csv")
+        input_npz = os.path.join(".", "latent_param_dataset_16.npz")
+        output_csv = os.path.join(".", "dataset_with_colors.csv")
+
+        # 1) Load points (expecting 3D)
+        points = None
+        if os.path.exists(input_csv):
+            # Try to load CSV with/without header
+            try:
+                data = np.genfromtxt(input_csv, delimiter=",", skip_header=1)
+                if data.ndim == 1:
+                    data = data.reshape(-1, 3)
+            except Exception:
+                data = np.genfromtxt(input_csv, delimiter=",")
+                if data.ndim == 1:
+                    data = data.reshape(-1, 3)
+            # Use first three columns as x,y,z
+            points = np.asarray(data)[:, :3]
+        elif os.path.exists(input_npz):
+            ds = np.load(input_npz)
+            pts = np.squeeze(ds['reduced_latent_matrix'])
+            if pts.ndim == 1:
+                pts = pts.reshape(-1, 1)
+            # ensure 3D present
+            if pts.shape[1] < 3:
+                raise ValueError("Dataset has fewer than 3 dimensions; cannot export x,y,z.")
+            points = pts[:, :3]
+        else:
+            # Fallback to in-memory dataset already loaded in this class
+            pts = np.squeeze(self.latent)
+            if pts.ndim == 1:
+                pts = pts.reshape(-1, 1)
+            if pts.shape[1] < 3:
+                raise ValueError("self.latent has fewer than 3 dimensions; cannot export x,y,z.")
+            points = pts[:, :3]
+
+        # 2) Cluster with DBSCAN
+        # Heuristic parameters; can be tuned by the caller in future if needed
+        # Scale-invariant approach: estimate eps from median NN distance
+        kdt = KDTree(points)
+        # query k=2 to ignore the point itself (distance=0), take the NN distance
+        dists, _ = kdt.query(points, k=2)
+        nn = dists[:, 1]
+        median_nn = float(np.median(nn))
+        eps = 1.5 * median_nn if median_nn > 0 else 0.05
+        min_samples = max(5, int(round(points.shape[0] * 0.005)))  # ~0.5% of dataset or at least 5
+
+        db = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = db.fit_predict(points)
+
+        # 3) Compute per-cluster "closeness" (smaller avg NN distance => tighter => higher closeness)
+        unique_labels = np.unique(labels[labels >= 0])  # exclude noise (-1)
+        cluster_closeness = {}
+        for lbl in unique_labels:
+            idx = np.where(labels == lbl)[0]
+            if idx.size <= 1:
+                cluster_closeness[lbl] = 0.0
+                continue
+            pts_c = points[idx]
+            kdt_c = KDTree(pts_c)
+            d_c, _ = kdt_c.query(pts_c, k=2)
+            nn_c = d_c[:, 1]
+            mean_nn = float(np.mean(nn_c))
+            cluster_closeness[lbl] = mean_nn
+
+        if len(cluster_closeness) > 0:
+            vals = np.array(list(cluster_closeness.values()))
+            vmin, vmax = float(np.min(vals)), float(np.max(vals))
+            if vmax > vmin:
+                # map lower mean_nn (tighter) to higher closeness in [0,1]
+                for lbl, v in cluster_closeness.items():
+                    closeness = (vmax - v) / (vmax - vmin)
+                    cluster_closeness[lbl] = float(closeness)
+            else:
+                for lbl in cluster_closeness.keys():
+                    cluster_closeness[lbl] = 1.0
+        
+        # 4) Map closeness to colors using a colormap (RGB floats in [0,1])
+        cmap = cm.get_cmap('viridis')
+        label_to_rgb = {}
+        for lbl in unique_labels:
+            closeness = cluster_closeness.get(lbl, 0.0)
+            r, g, b, _ = cmap(closeness)
+            label_to_rgb[lbl] = (float(r), float(g), float(b))
+        noise_rgb = (0.5, 0.5, 0.5)  # gray for noise
+
+        # 5) Assign RGB to each point
+        colors = []  # list of (r,g,b)
+        for lbl in labels:
+            if lbl == -1:
+                colors.append(noise_rgb)
+            else:
+                colors.append(label_to_rgb.get(lbl, noise_rgb))
+        colors = np.array(colors)  # shape (N,3)
+
+        # 6) Write output CSV: x,y,z,r,g,b
+        with open(output_csv, 'w') as f:
+            f.write("x,y,z,r,g,b\n")
+            for (xv, yv, zv), (rv, gv, bv) in zip(points, colors):
+                f.write(f"{xv},{yv},{zv},{rv},{gv},{bv}\n")
+
+        # 7) Also write JS dataset file for frontend consumption
+        # Path: ../frontend/dataset3D_withcolors.js relative to this file
+        js_out_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js'))
+        js_obj = {
+            "x": points[:, 0].tolist(),
+            "y": points[:, 1].tolist(),
+            "z": points[:, 2].tolist(),
+            "r": colors[:, 0].tolist(),
+            "g": colors[:, 1].tolist(),
+            "b": colors[:, 2].tolist(),
+        }
+        js_content = "var dataset3D_withcolors = " + json.dumps(js_obj) + "\n"
+        with open(js_out_path, 'w') as jf:
+            jf.write(js_content)
+
+        return {
+            "output_csv": output_csv,
+            "output_js": js_out_path,
+            "eps": eps,
+            "min_samples": min_samples,
+            "n_clusters": int(len(unique_labels)),
+            "n_noise": int(np.sum(labels == -1)),
+        }
 
 
 
@@ -297,5 +437,6 @@ if __name__ == "__main__":
     dispatcher.map("/startrecording", handler=cloud.startrecording_handler)
     dispatcher.map("/stoprecording", handler=cloud.stoprecording_handler)
     dispatcher.set_default_handler(handler=cloud.getparameters_handler)
+    cloud.trainDatasetWithColors()
     print("Set up complete! Start playing the benjolin!")
     server.serve_forever()  # Blocks forever

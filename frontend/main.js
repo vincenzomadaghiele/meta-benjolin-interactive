@@ -1680,9 +1680,12 @@ const CAMERA_POSITION = 1500;
 const BASE_OPACITY = 0.7;
 
 // DATA
-const x = new Float32Array(dataset3D['x']); //.slice(0, 100);
-const y = new Float32Array(dataset3D['y']); //.slice(0, 100);
-const z = new Float32Array(dataset3D['z']); //.slice(0, 100);
+const x = new Float32Array(dataset3D_withcolors['x']); //.slice(0, 100);
+const y = new Float32Array(dataset3D_withcolors['y']); //.slice(0, 100);
+const z = new Float32Array(dataset3D_withcolors['z']); //.slice(0, 100);
+const r = new Float32Array(dataset3D_withcolors['r']); //.slice(0, 100);
+const g = new Float32Array(dataset3D_withcolors['g']); //.slice(0, 100);
+const b = new Float32Array(dataset3D_withcolors['b']); //.slice(0, 100);
 const N_POINTS = x.length;
 let particles;
 
@@ -1740,7 +1743,7 @@ function init() {
         let this_y = y[i] * scale_y - (scale_y/2);
         let this_z = z[i] * scale_z - (scale_z/2);
 		vertices.push( this_x, this_y, this_z);
-        color.setRGB( 255, 0, 0 );
+        color.setRGB( r[i], g[i], b[i] );
         colors.push( color.r, color.g, color.b );
         sizes[i] = PARTICLE_SIZE;
         opacities[i] = BASE_OPACITY;
