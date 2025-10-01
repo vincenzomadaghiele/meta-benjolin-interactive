@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@5/+esm";
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import calculateCurrentCompostionTime from './main.js';
 
 // VISUALIZATION PROPERTIES
 const scale_x = 100;
@@ -230,34 +229,30 @@ class PickHelper {
         const intersectedObjects = this.raycaster.intersectObjects(scene.children);
         if (intersectedObjects.length) {
             if ( intersectedObjects[0].index != this.clickedObjectIndex ){
-                let compositionTime = calculateCurrentCompostionTime();
-                if ( compositionTime < MAX_COMPOSITION_DURATION){
-                    
-                    // click the first object. It's the closest one            
-                    this.clickedObject = intersectedObjects[0].object;
-                    this.clickedObjectIndex = intersectedObjects[0].index;
-                    clickedIndices.push(this.clickedObjectIndex);
-                    // update size
-                    particles.geometry.attributes.size.array[ this.clickedObjectIndex ] = PARTICLE_SIZE * 20;
-                    particles.geometry.attributes.size.needsUpdate = true;
-                    // update opacity
-                    particles.geometry.attributes.opacity.array[ this.clickedObjectIndex ] = 1;
-                    particles.geometry.attributes.opacity.needsUpdate = true;
-                    // update color
-                    let newcolor = new THREE.Color();
-                    let newHueValue = Math.random();
-                    let newRGBvalues = colorHsbToRgb( newHueValue*360, 0.9*100, 0.9*100 );
-                    newcolor.setRGB( newRGBvalues[0]/255, newRGBvalues[1]/255, newRGBvalues[2]/255 );
-                    particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 ] = newcolor.r;
-                    particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 + 1 ] = newcolor.g;
-                    particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 + 2 ] = newcolor.b;
-                    particles.geometry.attributes.customColor.needsUpdate = true;
-                    material.needsUpdate = true;
-                    console.log("clicked ID: "+intersectedObjects[0].index);
+                // click the first object. It's the closest one            
+                this.clickedObject = intersectedObjects[0].object;
+                this.clickedObjectIndex = intersectedObjects[0].index;
+                clickedIndices.push(this.clickedObjectIndex);
+                // update size
+                particles.geometry.attributes.size.array[ this.clickedObjectIndex ] = PARTICLE_SIZE * 20;
+                particles.geometry.attributes.size.needsUpdate = true;
+                // update opacity
+                particles.geometry.attributes.opacity.array[ this.clickedObjectIndex ] = 1;
+                particles.geometry.attributes.opacity.needsUpdate = true;
+                // update color
+                let newcolor = new THREE.Color();
+                let newHueValue = Math.random();
+                let newRGBvalues = colorHsbToRgb( newHueValue*360, 0.9*100, 0.9*100 );
+                newcolor.setRGB( newRGBvalues[0]/255, newRGBvalues[1]/255, newRGBvalues[2]/255 );
+                particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 ] = newcolor.r;
+                particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 + 1 ] = newcolor.g;
+                particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 + 2 ] = newcolor.b;
+                particles.geometry.attributes.customColor.needsUpdate = true;
+                material.needsUpdate = true;
+                console.log("clicked ID: "+intersectedObjects[0].index);
 
-                    drawBox(x[ this.clickedObjectIndex ], y[ this.clickedObjectIndex ], z[ this.clickedObjectIndex ], 
-                        newHueValue, this.clickedObjectIndex); 
-                }
+                drawBox(x[ this.clickedObjectIndex ], y[ this.clickedObjectIndex ], z[ this.clickedObjectIndex ], 
+                    newHueValue, this.clickedObjectIndex); 
             }
         }
     }
