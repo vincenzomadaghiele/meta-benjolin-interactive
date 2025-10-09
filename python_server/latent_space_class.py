@@ -41,6 +41,7 @@ class LatentSpace():
         self.clientPd.send_message("/params", params_message)
 
     def stop_benjo(self):
+        #print("Stop is called")
         self.clientPd.send_message("/stop", 0)
 
     def start_recording(self):
@@ -268,51 +269,19 @@ class LatentSpace():
         return self.param_handler.getparameters_handler(address, *args)
 
     def trainDatasetWithColors(self):
-        """
-        Train clustering on a 3D dataset using DBSCAN and export colors per point.
-        
-        Load order:
-        1) './dataset3D copy.csv'
-        2) './latent_param_dataset_16.npz'
-        3) Fallback: use self.latent
-        
-        Output: './dataset_with_colors.csv' with columns: x,y,z,color
-        """
-        input_csv = os.path.join(".", "dataset3D copy.csv")
         input_npz = os.path.join(".", "latent_param_dataset_16.npz")
         output_csv = os.path.join(".", "dataset_with_colors.csv")
 
         # 1) Load points (expecting 3D)
         points = None
-        if os.path.exists(input_csv):
-            # Try to load CSV with/without header
-            try:
-                data = np.genfromtxt(input_csv, delimiter=",", skip_header=1)
-                if data.ndim == 1:
-                    data = data.reshape(-1, 3)
-            except Exception:
-                data = np.genfromtxt(input_csv, delimiter=",")
-                if data.ndim == 1:
-                    data = data.reshape(-1, 3)
-            # Use first three columns as x,y,z
-            points = np.asarray(data)[:, :3]
-        elif os.path.exists(input_npz):
-            ds = np.load(input_npz)
-            pts = np.squeeze(ds['reduced_latent_matrix'])
-            if pts.ndim == 1:
-                pts = pts.reshape(-1, 1)
-            # ensure 3D present
-            if pts.shape[1] < 3:
-                raise ValueError("Dataset has fewer than 3 dimensions; cannot export x,y,z.")
-            points = pts[:, :3]
-        else:
-            # Fallback to in-memory dataset already loaded in this class
-            pts = np.squeeze(self.latent)
-            if pts.ndim == 1:
-                pts = pts.reshape(-1, 1)
-            if pts.shape[1] < 3:
-                raise ValueError("self.latent has fewer than 3 dimensions; cannot export x,y,z.")
-            points = pts[:, :3]
+        ds = np.load(input_npz)
+        pts = np.squeeze(ds['reduced_latent_matrix'])
+        if pts.ndim == 1:
+            pts = pts.reshape(-1, 1)
+        # ensure 3D present
+        if pts.shape[1] < 3:
+            raise ValueError("Dataset has fewer than 3 dimensions; cannot export x,y,z.")
+        points = pts[:, :3]
 
         # 2) Cluster with DBSCAN
         # Heuristic parameters; can be tuned by the caller in future if needed
