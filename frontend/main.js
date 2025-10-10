@@ -372,6 +372,41 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevEl
             "stroke-width": 8,
             opacity: 0.3
         });
+    // Apply exact color used in vertex shader, falling back to dataset r,g,b
+    try {
+        const idx = arrayIndex;
+        let applied = false;
+        // 1) Prefer reading color directly from THREE geometry (ensures 1:1 match with vertex shader)
+        if (typeof particles !== 'undefined' && particles && particles.geometry && particles.geometry.attributes && particles.geometry.attributes.customColor) {
+            const cc = particles.geometry.attributes.customColor.array;
+            const r0 = cc[idx * 3];
+            const g0 = cc[idx * 3 + 1];
+            const b0 = cc[idx * 3 + 2];
+            if (r0 != null && g0 != null && b0 != null) {
+                const r255 = Math.round(r0 <= 1 ? r0 * 255 : r0);
+                const g255 = Math.round(g0 <= 1 ? g0 * 255 : g0);
+                const b255 = Math.round(b0 <= 1 ? b0 * 255 : b0);
+                const rgbCss = `rgb(${r255}, ${g255}, ${b255})`;
+                s.attr({ fill: rgbCss });
+                c.attr({ stroke: rgbCss });
+                applied = true;
+            }
+        }
+        // 2) Fallback to dataset arrays r,g,b
+        if (!applied && typeof idx !== 'undefined' && idx != null && r && g && b && r[idx] != null && g[idx] != null && b[idx] != null) {
+            const rv = Number(r[idx]);
+            const gv = Number(g[idx]);
+            const bv = Number(b[idx]);
+            const r255 = Math.round(rv <= 1 ? rv * 255 : rv);
+            const g255 = Math.round(gv <= 1 ? gv * 255 : gv);
+            const b255 = Math.round(bv <= 1 ? bv * 255 : bv);
+            const rgbCss = `rgb(${r255}, ${g255}, ${b255})`;
+            s.attr({ fill: rgbCss });
+            c.attr({ stroke: rgbCss });
+            applied = true;
+        }
+        // 3) Otherwise keep the HSB fallback already set
+    } catch(e) { /* keep HSB fallback */ }
     c.sized = s;
     c.parentDiv = document.getElementById(newBox.id);
     c.raph = R;
@@ -1871,15 +1906,7 @@ class PickHelper {
                 particles.geometry.attributes.size.needsUpdate = true;
                 // update opacity
                 particles.geometry.attributes.opacity.array[ this.clickedObjectIndex ] = 1;
-                particles.geometry.attributes.opacity.needsUpdate = true;                
-                // change color of picked object to white
-                let newcolor = new THREE.Color();
-                newcolor.setRGB( 255, 255, 255 );
-                particles.geometry.attributes.customColor.array[ this.pickedObjectIndex * 3 ] = newcolor.r;
-                particles.geometry.attributes.customColor.array[ this.pickedObjectIndex * 3 + 1 ] = newcolor.g;
-                particles.geometry.attributes.customColor.array[ this.pickedObjectIndex * 3 + 2 ] = newcolor.b;
-                particles.geometry.attributes.customColor.needsUpdate = true;
-                //material.needsUpdate = true
+                particles.geometry.attributes.opacity.needsUpdate = true;
             }
             //console.log("picked ID: "+intersectedObjects[0].index);
             sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex]);
@@ -1913,20 +1940,12 @@ class PickHelper {
                     // update opacity
                     particles.geometry.attributes.opacity.array[ this.clickedObjectIndex ] = 1;
                     particles.geometry.attributes.opacity.needsUpdate = true;
-                    // update color
-                    let newcolor = new THREE.Color();
+                    // keep dataset color; only compute hue for drawBox API
                     let newHueValue = Math.random();
-                    let newRGBvalues = colorHsbToRgb( newHueValue*360, 0.9*100, 0.9*100 );
-                    newcolor.setRGB( newRGBvalues[0]/255, newRGBvalues[1]/255, newRGBvalues[2]/255 );
-                    particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 ] = newcolor.r;
-                    particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 + 1 ] = newcolor.g;
-                    particles.geometry.attributes.customColor.array[ this.clickedObjectIndex * 3 + 2 ] = newcolor.b;
-                    particles.geometry.attributes.customColor.needsUpdate = true;
-                    material.needsUpdate = true;
                     console.log("clicked ID: "+intersectedObjects[0].index);
 
-                    drawBox(x[ this.clickedObjectIndex ], y[ this.clickedObjectIndex ], z[ this.clickedObjectIndex ], 
-                        newHueValue, this.clickedObjectIndex); 
+                    drawBox(x[ this.clickedObjectIndex ], y[ this.clickedObjectIndex ], z[ this.clickedObjectIndex ],
+                        newHueValue, this.clickedObjectIndex);
                 }
             }
         }
@@ -2016,13 +2035,7 @@ function pointToBasic(pointIndex){
     // update size
     particles.geometry.attributes.size.array[ pointIndex ] = PARTICLE_SIZE;
     particles.geometry.attributes.size.needsUpdate = true;
-    // update color
-    let newcolor = new THREE.Color();
-    newcolor.setRGB( 255, 0, 0 );
-    particles.geometry.attributes.customColor.array[ pointIndex * 3 ] = newcolor.r;
-    particles.geometry.attributes.customColor.array[ pointIndex * 3 + 1 ] = newcolor.g;
-    particles.geometry.attributes.customColor.array[ pointIndex * 3 + 2 ] = newcolor.b;
-    particles.geometry.attributes.customColor.needsUpdate = true;
+    // keep dataset color; do not override customColor
     material.needsUpdate = true
 }
 
