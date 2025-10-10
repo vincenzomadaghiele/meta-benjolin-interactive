@@ -41,7 +41,7 @@ class LatentSpace():
         self.clientPd.send_message("/params", params_message)
 
     def stop_benjo(self):
-        #print("Stop is called")
+        print("Stop is called")
         self.clientPd.send_message("/stop", 0)
 
     def start_recording(self):

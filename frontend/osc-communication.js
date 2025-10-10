@@ -89,8 +89,12 @@ port.on("message", function (oscMessage) {
     }
 });
 
+// Global playback state flag
+var IS_PLAY_ON = false;
+
 // get x, y, z coordinates and play corresponding sound
 var sendBox = function (send_x, send_y, send_z){
+    IS_PLAY_ON = true;
     port.send({
         address: "/play/box",
         args: [
@@ -111,6 +115,7 @@ var sendBox = function (send_x, send_y, send_z){
 }
 
 var sendMeander = function (send_start_x, send_start_y, send_start_z, send_end_x, send_end_y, send_end_z, meander_time){
+    IS_PLAY_ON = true;
     port.send({
         address: "/play/meander",
         args: [
@@ -217,6 +222,7 @@ var sendCrossfade = function (send_start_x, send_start_y, send_start_z, send_end
 }
 
 var sendStop = function (){
+    IS_PLAY_ON = false;
     port.send({
         address: "/stop",
         args: []

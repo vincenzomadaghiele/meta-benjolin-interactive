@@ -1911,7 +1911,9 @@ class PickHelper {
             //console.log("picked ID: "+intersectedObjects[0].index);
             sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex]);
         } else {
-            sendStop();
+            if (typeof IS_PLAY_ON === 'undefined' || IS_PLAY_ON) {
+                sendStop();
+            }
         }
         CURRENTPICKEDINDEX = this.pickedObjectIndex;
     }
