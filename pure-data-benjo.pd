@@ -576,10 +576,10 @@
 #X connect 17 0 20 0;
 #X connect 18 0 17 1;
 #X connect 19 0 21 0;
-#X connect 20 0 1 0;
 #X connect 20 0 1 1;
 #X connect 20 0 39 0;
 #X connect 20 0 23 0;
+#X connect 20 0 1 0;
 #X connect 22 0 20 1;
 #X connect 24 0 23 0;
 #X connect 25 0 23 0;

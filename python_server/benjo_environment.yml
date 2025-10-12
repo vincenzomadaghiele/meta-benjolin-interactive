@@ -11,6 +11,9 @@ dependencies:
   - openssl=3.0.15=h80987f9_0
   - pip=24.2=py312hca03da5_0
   - python=3.12.5=h99e199e_1
+  - numpy
+  - scikit-learn
+  - matplotlib
   - readline=8.2=h1a28f6b_0
   - setuptools=75.1.0=py312hca03da5_0
   - sqlite=3.45.3=h80987f9_0

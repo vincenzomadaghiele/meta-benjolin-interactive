@@ -174,6 +174,8 @@ function addBoxMarkerForIndex(idx, x, y, z) {
     const py = Number(y) * scale_y - (scale_y/2);
     const pz = Number(z) * scale_z - (scale_z/2);
     const marker = createMarkerPoint(px, py, pz);
+    console.info("addBoxMarkerForIndex " + idx + " " + x + " " + y + " " + z)
+    console.info("addBoxMarkerForIndex p " + px + " " + py + " " + pz)
     scene.add(marker);
     boxMarkers[idx] = marker;
 }

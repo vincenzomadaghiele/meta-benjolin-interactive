@@ -131,8 +131,10 @@ class ParameterHandler:
             # Draw the box at the normalized coordinates and include elapsed_prev_sec for previous box
             # If elapsed_prev_sec is None, send -1 to indicate unknown (first box)
             elapsed_arg = elapsed_prev_sec if elapsed_prev_sec is not None else -1.0
-            self.clientJS.send_message("/drawBox", [x_n, y_n, z_n, random.randint(3, 9), 0, elapsed_arg])
-            print(f"Sent drawBox message to Node.js (normalized): x={x_n}, y={y_n}, z={z_n}, prev_elapsed={elapsed_arg}")
+            print(f"prev seconds: {elapsed_arg} index is {selected_index}")
+            # 5th argument should be the dataset index for color lookup in the frontend
+            self.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(selected_index), elapsed_arg])
+            print(f"Sent drawBox message to Node.js (normalized): x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
             # Update previous draw coordinates using normalized values
             self.prev_draw_coords = [x_n, y_n, z_n]
         except Exception as e:
