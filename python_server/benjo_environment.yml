@@ -22,6 +22,7 @@ dependencies:
   - wheel=0.44.0=py312hca03da5_0
   - xz=5.4.6=h80987f9_1
   - zlib=1.2.13=h18a0788_1
+  - pytest
   - pip:
       - python-osc==1.9.0
       - scipy==1.14.1
