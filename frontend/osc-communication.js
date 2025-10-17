@@ -79,11 +79,13 @@ port.on("message", function (oscMessage) {
         // Also draw a point at the same coordinates in the 3D scene (retry if main.js not ready yet)
         callDrawPointAtWithRetry(x, y, z);
     } else if (oscMessage.address === "/drawCrossfade") {
-        console.log("Received drawCrossfade message");
-        drawCrossfade();
+        const durationMs = oscMessage.args.length > 0 ? oscMessage.args[0] : null;
+        console.log("Received drawCrossfade message", durationMs ? `with duration ${durationMs}ms` : "");
+        drawCrossfade(durationMs);
     } else if (oscMessage.address === "/drawMeander") {
-        console.log("Received drawMeander message");
-        drawMeander();
+        const durationMs = oscMessage.args.length > 0 ? oscMessage.args[0] : null;
+        console.log("Received drawMeander message", durationMs ? `with duration ${durationMs}ms` : "");
+        drawMeander(durationMs);
     } else {
         console.log("Address did not match with any handler" + oscMessage.address);
     }

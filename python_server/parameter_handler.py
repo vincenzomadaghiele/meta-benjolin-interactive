@@ -6,8 +6,8 @@ import random
 class ParameterHandler:
     def __init__(self, clientJS, latent):
         self.data_dir = "./latent_param_dataset_16.npz"
-        self.crossfade_threshold = 0.02
-        self.buffer_duration_seconds = 0.05
+        self.change_threshold = 0.02
+        self.buffer_duration_seconds = 0.1
 
 
         self.clientJS = clientJS
@@ -16,13 +16,6 @@ class ParameterHandler:
 
         # Visualization change speed tracking
         self.prev_draw_coords = None
-        latent = np.asarray(latent)
-        # Precompute min and range per dimension to normalize to [0,1]
-        self._latent_min = np.min(latent, axis=0)
-        self._latent_ptp_vec = np.ptp(latent, axis=0)
-        self._latent_ptp_vec[self._latent_ptp_vec == 0] = 1.0  # avoid div by zero
-        # For delta normalization, use the Euclidean length of the latent bounding box diagonal
-        self._latent_range_norm = float(np.linalg.norm(self._latent_ptp_vec)) if np.any(self._latent_ptp_vec) else 1.0
         
         # Buffer for target_params with short delay
         self.target_params_buffer = []
@@ -63,16 +56,55 @@ class ParameterHandler:
                 print(f"Processing buffered params after delay: {last_target_params}")
                 self.find_closest_point(last_target_params)
 
+    def _calculate_param_change_duration(self):
+        """Calculate how long parameters were changing in the buffer.
+        
+        This algorithm detects when parameters have permanently stabilized by looking
+        for a sustained period of identical values at the end of the buffer.
+        It includes temporary pauses in the change duration.
+        """
+        buffer_len = len(self.target_params_buffer)
+        if buffer_len <= 1:
+            # Only one entry or empty, no change duration
+            return 0
+        
+        # Find the stabilization point by looking backwards from the end
+        # Count how many consecutive identical entries exist at the end
+        stabilization_threshold = max(2, int(buffer_len * 0.3))  # At least 30% of buffer or 2 entries
+        stable_count = 1
+        
+        for i in range(buffer_len - 1, 0, -1):
+            if np.array_equal(self.target_params_buffer[i], self.target_params_buffer[i - 1]):
+                stable_count += 1
+            else:
+                # Found a change, stop counting stable entries
+                break
+        
+        # Determine if parameters have permanently stabilized
+        if stable_count >= stabilization_threshold:
+            # Parameters have stabilized - calculate duration up to stabilization point
+            change_end_index = buffer_len - stable_count
+            if change_end_index <= 0:
+                # All entries are the same, no change
+                return 0
+            # Calculate proportion of buffer that had changes
+            proportion = change_end_index / (buffer_len - 1)
+            duration_ms = int(proportion * self.buffer_duration_seconds * 1000)
+        else:
+            # Parameters are still changing or haven't stabilized long enough
+            # Use full buffer duration
+            duration_ms = int(self.buffer_duration_seconds * 1000)
+        
+        print(f"Buffer analysis: {buffer_len} entries, {stable_count} stable at end, threshold: {stabilization_threshold}")
+        duration_calculated = max(duration_ms, 0)  # Ensure non-negative
+        return duration_calculated if duration_calculated > 0 else 100 
+
     def find_closest_point(self, target_params):
         dataset = np.load(self.data_dir)
 
         # Convert both to integers for consistent comparison
         param_matrix_int = dataset['parameter_matrix'].astype(int)
         target_params_int = np.array(target_params, dtype=int)
-
-        # Ensure target_params is 1D and has correct length
-        if target_params_int.ndim > 1:
-            target_params_int = target_params_int.flatten()
 
         # If incoming has fewer params, compare against first N
         if len(target_params_int) != param_matrix_int.shape[1]:
@@ -95,31 +127,8 @@ class ParameterHandler:
             print(f"Closest match at index {selected_index}")
 
         x, y, z = dataset['reduced_latent_matrix'][selected_index]
-        # Normalize to [0,1] using precomputed dataset bounds so they render correctly in the UI
-        x_n = float((x - self._latent_min[0]) / self._latent_ptp_vec[0])
-        y_n = float((y - self._latent_min[1]) / self._latent_ptp_vec[1])
-        z_n = float((z - self._latent_min[2]) / self._latent_ptp_vec[2])
-        print(f"Latent coordinates (raw): x={x}, y={y}, z={z}")
-        print(f"Latent coordinates (normalized): x={x_n}, y={y_n}, z={z_n}")
+        print(f"Latent coordinates: x={x}, y={y}, z={z}")
         try:
-            # Decide visualization based on how big the change is vs. the previous draw coords
-            if self.prev_draw_coords is not None:
-                prev = np.array(self.prev_draw_coords, dtype=float)
-                curr = np.array([x_n, y_n, z_n], dtype=float)
-                delta = float(np.linalg.norm(curr - prev))
-                # Normalize by latent space diagonal to get a scale-invariant measure
-                normalized_delta = delta / self._latent_range_norm if self._latent_range_norm else delta
-                print(f"Change magnitude (normalized): {normalized_delta:.4f} (threshold {self.crossfade_threshold})")
-                if normalized_delta > self.crossfade_threshold:
-                    # Fast change
-                    self.clientJS.send_message("/drawCrossfade", "")
-                else:
-                    # Slow change
-                    self.clientJS.send_message("/drawMeander", "")
-            else:
-                # First draw; treat as slow/meander by default
-                self.clientJS.send_message("/drawMeander", "")
-
             # Compute elapsed seconds since last drawBox
             import time
             now = time.time()
@@ -128,14 +137,35 @@ class ParameterHandler:
                 elapsed_prev_sec = float(now - self._last_drawbox_time)
             self._last_drawbox_time = now
 
-            # Draw the box at the normalized coordinates and include elapsed_prev_sec for previous box
+            # Calculate parameter change duration
+            change_duration_ms = self._calculate_param_change_duration()
+
+            # Decide visualization based on how big the change is vs. the previous draw coords
+            if self.prev_draw_coords is not None:
+                prev = np.array(self.prev_draw_coords, dtype=float)
+                curr = np.array([x, y, z], dtype=float)
+                delta = float(np.linalg.norm(curr - prev))
+                print(f"Change magnitude: {delta:.4f} (threshold {self.change_threshold})")
+                if delta > self.change_threshold:
+                    # Fast change - send crossfade with parameter change duration
+                    self.clientJS.send_message("/drawCrossfade", change_duration_ms)
+                    print(f"Sent /drawCrossfade with duration: {change_duration_ms}ms")
+                else:
+                    # Slow change - send meander with parameter change duration
+                    self.clientJS.send_message("/drawMeander", change_duration_ms)
+                    print(f"Sent /drawMeander with duration: {change_duration_ms}ms")
+            else:
+                self.clientJS.send_message("/drawMeander", change_duration_ms)
+                print(f"Sent /drawMeander (first draw) with duration: {change_duration_ms}ms")
+
+            # Draw the box at the coordinates and include elapsed_prev_sec for previous box
             # If elapsed_prev_sec is None, send -1 to indicate unknown (first box)
             elapsed_arg = elapsed_prev_sec if elapsed_prev_sec is not None else -1.0
             print(f"prev seconds: {elapsed_arg} index is {selected_index}")
             # 5th argument should be the dataset index for color lookup in the frontend
             self.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(selected_index), elapsed_arg])
-            print(f"Sent drawBox message to Node.js (normalized): x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
-            # Update previous draw coordinates using normalized values
-            self.prev_draw_coords = [x_n, y_n, z_n]
+            print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
+            # Update previous draw coordinates using raw values
+            self.prev_draw_coords = [x, y, z]
         except Exception as e:
             print(f"Error sending to Node.js: {e}")

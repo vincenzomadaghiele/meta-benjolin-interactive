@@ -274,6 +274,13 @@ function timesToPxHeight (time_ms) {
     let height_px = time_ms * conversion_factor;
     return height_px
 }
+function timesToPxHeightForTransitions (time_ms) {
+    // For transitions, use a minimum visible height
+    // Since durations from Python are ~50-100ms, we need a larger multiplier
+    let baseHeight = timesToPxHeight(time_ms);
+    let scaledHeight = baseHeight * 50; // Scale up small durations
+    return Math.max(scaledHeight, 20); // Minimum 30px height
+}
 function pxHeightToTimesMs (height_px) {
     // adaptively calculate element height in pixel corresponding to time in milliseconds
     // window height : max duration = height_px : time_ms
@@ -531,7 +538,7 @@ var up = function () {
 }
 
 // CROSSFADE
-window.drawCrossfade = function drawCrossfade(){
+window.drawCrossfade = function drawCrossfade(durationMs = null){
     let compositionTime = calculateCurrentCompostionTime();
     // Require at least one Box to exist and be last before drawing a crossfade
     if (compositionArray.length === 0) {
@@ -548,7 +555,9 @@ window.drawCrossfade = function drawCrossfade(){
         newBox.className = 'crossfade';
         document.getElementById("composition-bar").appendChild(newBox); 
 
-        let boxStartHeight = timesToPxHeight( BASIC_ELEMENT_T );
+        const crossfadeDuration = durationMs !== null ? durationMs : BASIC_ELEMENT_T;
+        let boxStartHeight = timesToPxHeightForTransitions( crossfadeDuration );
+        console.log(`Crossfade: durationMs=${crossfadeDuration}, boxStartHeight=${boxStartHeight}`);
         // from https://jsfiddle.net/TfE2X/
         var R = Raphael("box "+numBoxes, COMPOSITION_BAR_WIDTH_PX, boxStartHeight+MARGIN_PX);
         var path = R.path("M"+(COMPOSITION_BAR_WIDTH_PX/2)+" 0L"+(COMPOSITION_BAR_WIDTH_PX/2)+" "+boxStartHeight).attr({
@@ -617,8 +626,7 @@ window.drawCrossfade = function drawCrossfade(){
         newBox.addEventListener('dragleave', dragLeave);
         newBox.addEventListener('drop', drop);
 
-        var duration = pxHeightToTimesMs(newBox.clientHeight); 
-        compositionArray.push(new Crossfade(duration));
+        compositionArray.push(new Crossfade(crossfadeDuration));
 
         numBoxes += 1;
         raphaels.push(R);
@@ -658,7 +666,7 @@ var up_crossfade = function () {
 };
 
 
-window.drawMeander = function drawMeander(){
+window.drawMeander = function drawMeander(durationMs = null){
     let compositionTime = calculateCurrentCompostionTime();
     // Require at least one Box to exist and be last before drawing a meander
     if (compositionArray.length === 0) {
@@ -675,7 +683,9 @@ window.drawMeander = function drawMeander(){
         newBox.className = 'meander';
         document.getElementById("composition-bar").appendChild(newBox); 
 
-        let boxStartHeight = timesToPxHeight( BASIC_ELEMENT_T );
+        const meanderDuration = durationMs !== null ? durationMs : BASIC_ELEMENT_T;
+        let boxStartHeight = timesToPxHeightForTransitions( meanderDuration );
+        console.log(`Meander: durationMs=${meanderDuration}, boxStartHeight=${boxStartHeight}`);
         var R = Raphael("box "+numBoxes, COMPOSITION_BAR_WIDTH_PX, boxStartHeight+MARGIN_PX);
         let path1 = R.path("M"+(COMPOSITION_BAR_WIDTH_PX/2)+" 0L"+(COMPOSITION_BAR_WIDTH_PX/2+15)+" "+ (boxStartHeight/4)).attr({
             stroke: '#FFFFFF',
@@ -770,8 +780,7 @@ window.drawMeander = function drawMeander(){
         newBox.addEventListener('drop', drop);
 
 
-        var duration = pxHeightToTimesMs(newBox.clientHeight); 
-        compositionArray.push(new Meander(duration));
+        compositionArray.push(new Meander(meanderDuration));
 
         numBoxes += 1;
         raphaels.push(R);
