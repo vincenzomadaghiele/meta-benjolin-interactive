@@ -491,7 +491,12 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevEl
     if (typeof prevElapsedSec !== 'undefined' && prevElapsedSec != null && prevElapsedSec >= 0){
         const prevIndex = numBoxes - 2; // previous element index after increment
         if (prevIndex >= 0) {
-            updatPreviousBoxDurationAndHeight(Number(prevElapsedSec) * 1000);
+            // Apply slower growth with square root scaling and cap at 60 seconds
+            const MAX_DURATION_SEC = 10;
+            const cappedSec = Math.min(prevElapsedSec, MAX_DURATION_SEC);
+            // Use square root to slow down growth: sqrt(60) ≈ 7.75, so we scale back up
+            const scaledSec = Math.sqrt(cappedSec / MAX_DURATION_SEC) * MAX_DURATION_SEC;
+            updatPreviousBoxDurationAndHeight(Number(scaledSec) * 1000);
         }
     }
 }

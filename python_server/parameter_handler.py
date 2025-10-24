@@ -121,13 +121,17 @@ class ParameterHandler:
             print(f"Exact match found at index {selected_index}")
         else:
             print("No exact match found even after integer conversion")
-            # Fall back to closest match (use integer-converted target params)
+            # Euclidean
             distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
             selected_index = np.argmin(distances)
+            # Manhattan distance
+            #distances = np.sum(np.abs(param_matrix_int - target_params_int), axis=1)
+            #selected_index = np.argmin(distances)
             print(f"Closest match at index {selected_index}")
 
         x, y, z = dataset['reduced_latent_matrix'][selected_index]
         print(f"Latent coordinates: x={x}, y={y}, z={z}")
+        print(f"Parameters of closest point:  {dataset['parameter_matrix'][selected_index]}")
         try:
             # Compute elapsed seconds since last drawBox
             import time
