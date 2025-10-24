@@ -30,6 +30,9 @@ port.on("message", function (oscMessage) {
 // WebSocket connection debugging
 port.on("open", function () {
     console.log("✅ WebSocket connection opened successfully!");
+    // Send stop signal on page load/refresh
+    console.log("🛑 Sending stop signal on page load");
+    sendStop();
 });
 
 port.on("error", function (error) {

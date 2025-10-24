@@ -497,6 +497,11 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevEl
             // Use square root to slow down growth: sqrt(60) ≈ 7.75, so we scale back up
             const scaledSec = Math.sqrt(cappedSec / MAX_DURATION_SEC) * MAX_DURATION_SEC;
             updatPreviousBoxDurationAndHeight(Number(scaledSec) * 1000);
+
+            // Add double border if duration exceeded the max cap
+            if (prevElapsedSec > MAX_DURATION_SEC) {
+                
+            }
         }
     }
 }
