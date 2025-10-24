@@ -331,8 +331,15 @@ function updatPreviousBoxDurationAndHeight(newDurationMs){
     const indexToUpdate = compositionArray.length > 3 ? compositionArray.length - 3 : 0;
     // Update model
     compositionArray[indexToUpdate].duration = newDurationMs;
+
+    // Apply slower growth with square root scaling and cap at 60 seconds
+    const MAX_DURATION_MS = 10000;
+    const cappedSec = Math.min(newDurationMs, MAX_DURATION_MS);
+    // Use square root to slow down growth: sqrt(60) ≈ 7.75, so we scale back up
+    const scaledSec = Math.sqrt(cappedSec / MAX_DURATION_MS) * MAX_DURATION_MS;
+
     // Recompute height in px
-    const newHeight = timesToPxHeight(newDurationMs);
+    const newHeight = timesToPxHeight(scaledSec);
     // Update DOM container height
     const div = document.getElementById('box '+ indexToUpdate);
     if (div) {
@@ -491,17 +498,7 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevEl
     if (typeof prevElapsedSec !== 'undefined' && prevElapsedSec != null && prevElapsedSec >= 0){
         const prevIndex = numBoxes - 2; // previous element index after increment
         if (prevIndex >= 0) {
-            // Apply slower growth with square root scaling and cap at 60 seconds
-            const MAX_DURATION_SEC = 10;
-            const cappedSec = Math.min(prevElapsedSec, MAX_DURATION_SEC);
-            // Use square root to slow down growth: sqrt(60) ≈ 7.75, so we scale back up
-            const scaledSec = Math.sqrt(cappedSec / MAX_DURATION_SEC) * MAX_DURATION_SEC;
-            updatPreviousBoxDurationAndHeight(Number(scaledSec) * 1000);
-
-            // Add double border if duration exceeded the max cap
-            if (prevElapsedSec > MAX_DURATION_SEC) {
-                
-            }
+            updatPreviousBoxDurationAndHeight(Number(prevElapsedSec) * 1000);
         }
     }
 }
