@@ -350,9 +350,15 @@ function updatPreviousBoxDurationAndHeight(newDurationMs){
     if (paper) {
         paper.setSize(COMPOSITION_BAR_WIDTH_PX, newHeight + MARGIN_PX);
         const newr = newHeight / 2;
+        // Determine stroke width based on whether duration exceeded max
+        const strokeWidth = newDurationMs >= MAX_DURATION_MS ? 20 : 8; // 5x thicker (8 * 5 = 40)
         paper.forEach(function(el){
             if (el && el.type === 'circle'){
                 el.attr({ r: newr, cy: (newHeight + MARGIN_PX) / 2 });
+                // Update stroke width if this circle has a stroke
+                if (el.attr('stroke') !== 'none') {
+                    el.attr({ "stroke-width": strokeWidth });
+                }
             }
         });
     }
