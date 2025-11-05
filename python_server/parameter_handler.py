@@ -22,8 +22,8 @@ class ParameterHandler:
         self.buffer_timer = None
         self.buffer_lock = threading.Lock()
 
-    def getparameters_handler(self, address: str, *args):
-        print(f"Received msg on address {address} with args {args}")
+    def getparameters_handler(self, source: str, *args):
+        print(f"Received msg from source {source} with args {args}")
         # Convert args to integers (removes decimal points)
         target_params = np.array(args, dtype=int)
         print(f"Target params as integers: {target_params}")

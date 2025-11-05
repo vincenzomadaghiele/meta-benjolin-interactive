@@ -7,11 +7,13 @@ import time
 import threading
 import random
 from parameter_handler import ParameterHandler
+from benjolin_synth import BenjolinSynth
 import os
 from sklearn.cluster import DBSCAN
 import matplotlib.cm as cm
 from matplotlib.colors import to_hex
 import json
+import mido
 
 
 class LatentSpace():
@@ -35,15 +37,105 @@ class LatentSpace():
             clientJS=self.clientJS,
             latent=self.latent
         )
+        # Initialize BenjolinSynth with random startup parameters
+        N_params = 9  # 8 benjolin parameters + gain
+        startup_synth_parameters = np.random.rand(N_params).tolist()
+        self.synth = BenjolinSynth(startup_synth_parameters)
+        
+        # Initialize MIDI controller state (8 parameters + gain)
+        self.midi_parameters = [0.5] * 9  # Default to middle values (0-1 range)
+        self.midi_port = None
+        self.midi_thread = None
+        self.midi_listening = False
+
+        # Start MIDI listener automatically
+        self.start_midi_listener()
 
     def play_benjo(self):
         self.clientPd.send_message("/stop", 1)
         params_message = '-'.join([str(int(param)) for param in self.current_parameters])
         self.clientPd.send_message("/params", params_message)
+        # Play synth with current parameters (scaled 0-1)
+        if hasattr(self, 'synth') and self.synth:
+            # Convert parameters from 0-127 range to 0-1 range for BenjolinSynth
+            #normalized_params = [p / 127.0 for p in self.current_parameters]
+            print("parameters sent to play benjo: ", self.current_parameters)
+            self.synth.play(self.current_parameters)
 
     def stop_benjo(self):
         print("Stop is called")
         self.clientPd.send_message("/stop", 0)
+        if hasattr(self, 'synth') and self.synth:
+            self.synth.stop()
+    
+    def play_midi_parameters(self):
+        '''Play synth with current MIDI controller parameters'''
+        if hasattr(self, 'synth') and self.synth:
+            print(f"Playing MIDI parameters: {self.midi_parameters}")
+            self.synth.play(self.midi_parameters)
+            # Call getparameters_handler with MIDI parameters
+            # Format: /getparameters followed by the 8 parameter values
+            self.param_handler.getparameters_handler("midiListener", *self.midi_parameters[:8])
+    
+    def _midi_listener(self):
+        '''Background thread that listens to MIDI controller input'''
+        try:
+            while self.midi_listening:
+                for msg in self.midi_port.iter_pending():
+                    if msg.type == 'control_change':
+                        # Map first 8 CC controllers (CC 0-7) to parameters 0-7
+                        # CC 8 maps to gain (parameter 8)
+                        if msg.control < 9:
+                            # Convert MIDI value (0-127) to 0-1 range
+                            #normalized_value = msg.value / 127.0
+                            self.midi_parameters[msg.control] = msg.value
+                            print(f"MIDI CC {msg.control}: {msg.value}")#-> {normalized_value:.3f}")
+                            # Play synth with updated parameters
+                            self.play_midi_parameters()
+                time.sleep(0.01)  # Small delay to prevent CPU overuse
+        except Exception as e:
+            print(f"MIDI listener error: {e}")
+            self.midi_listening = False
+    
+    def start_midi_listener(self, port_name=None):
+        '''Start listening to MIDI controller input'''
+        try:
+            # List available MIDI ports
+            available_ports = mido.get_input_names()
+            print(f"Available MIDI ports: {available_ports}")
+            
+            if not available_ports:
+                print("No MIDI ports found")
+                return False
+            
+            # Use specified port or first available port
+            if port_name and port_name in available_ports:
+                selected_port = port_name
+            else:
+                selected_port = available_ports[0]
+            
+            print(f"Opening MIDI port: {selected_port}")
+            self.midi_port = mido.open_input(selected_port)
+            self.midi_listening = True
+            
+            # Start MIDI listener in background thread
+            self.midi_thread = threading.Thread(target=self._midi_listener, daemon=True)
+            self.midi_thread.start()
+            print("MIDI listener started")
+            return True
+            
+        except Exception as e:
+            print(f"Failed to start MIDI listener: {e}")
+            return False
+    
+    def stop_midi_listener(self):
+        '''Stop listening to MIDI controller'''
+        self.midi_listening = False
+        if self.midi_thread:
+            self.midi_thread.join(timeout=1.0)
+        if self.midi_port:
+            self.midi_port.close()
+        print("MIDI listener stopped")
 
     def start_recording(self):
         self.clientPd.send_message("/startrecording", 0)
@@ -124,12 +216,20 @@ class LatentSpace():
                 param_space_distances[i] = param_distance_to_a
                 latent_space_distances[i] = latent_distance_to_b
             cost_values[i] = param_space_distances[i] + latent_space_distances[i]
+        
+        # Check if all values are NaN (no valid next point found)
+        if np.all(np.isnan(cost_values)):
+            print(f"Warning: All neighbors visited or invalid, jumping to target {b}")
+            return b
+        
         argmin = np.nanargmin(cost_values)
         # if np.any(np.isnan(cost_values)): print(cost_values)
         index_of_best = indices[argmin]
         
         if index_of_best == a:
-            raise Exception
+            # If best point is current point, jump to target
+            print(f"Warning: Best point is current point, jumping to target {b}")
+            return b
         
         return index_of_best
 
@@ -219,6 +319,9 @@ class LatentSpace():
             params = params1 * a + params2 * b
             params_message = '-'.join([str(int(param)) for param in params])
             clientPd.send_message("/params", params_message)
+            if hasattr(self, 'synth') and self.synth:
+                print("parameters sent to play benjo: ", params_message)
+                self.synth.play(params_message)
             time.sleep(time_per_point)
 
     def drawMeander_handler(self, address: str, *args):
