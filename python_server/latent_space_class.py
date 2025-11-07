@@ -52,15 +52,13 @@ class LatentSpace():
         self.start_midi_listener()
 
     def play_benjo(self):
-        self.clientPd.send_message("/stop", 1)
+        #self.clientPd.send_message("/stop", 1)
         params_message = '-'.join([str(int(param)) for param in self.current_parameters])
         self.clientPd.send_message("/params", params_message)
         # Play synth with current parameters (scaled 0-1)
-        if hasattr(self, 'synth') and self.synth:
-            # Convert parameters from 0-127 range to 0-1 range for BenjolinSynth
-            #normalized_params = [p / 127.0 for p in self.current_parameters]
-            print("parameters sent to play benjo: ", self.current_parameters)
-            self.synth.play(self.current_parameters)
+        self.midi_parameters = self.current_parameters
+        print("Playing box with params: ", self.current_parameters)
+        self.play_midi_parameters()
 
     def stop_benjo(self):
         print("Stop is called")
@@ -73,9 +71,6 @@ class LatentSpace():
         if hasattr(self, 'synth') and self.synth:
             print(f"Playing MIDI parameters: {self.midi_parameters}")
             self.synth.play(self.midi_parameters)
-            # Call getparameters_handler with MIDI parameters
-            # Format: /getparameters followed by the 8 parameter values
-            self.param_handler.getparameters_handler("midiListener", *self.midi_parameters[:8])
     
     def _midi_listener(self):
         '''Background thread that listens to MIDI controller input'''
@@ -92,9 +87,18 @@ class LatentSpace():
                             print(f"MIDI CC {msg.control}: {msg.value}")#-> {normalized_value:.3f}")
                             # Play synth with updated parameters
                             self.play_midi_parameters()
+                            # Call getparameters_handler with MIDI parameters (only first 8, excluding gain)
+                            try:
+                                params_to_send = self.midi_parameters[:8]
+                                print(f"Sending {len(params_to_send)} parameters to handler: {params_to_send}")
+                                self.param_handler.getparameters_handler("midiListener", *params_to_send)
+                            except Exception as param_error:
+                                print(f"Error in getparameters_handler: {param_error}")
                 time.sleep(0.01)  # Small delay to prevent CPU overuse
         except Exception as e:
             print(f"MIDI listener error: {e}")
+            import traceback
+            traceback.print_exc()
             self.midi_listening = False
     
     def start_midi_listener(self, port_name=None):
@@ -310,6 +314,7 @@ class LatentSpace():
         thread = threading.Thread(target=self._play_crossfade_in_background, args=(params1, params2, steps, time_per_point))
         thread.start()
 
+# shortest in parameters
     def _play_crossfade_in_background(self, params1, params2, steps, time_per_point):
         for i in range(steps):
             if not self.is_playing_crossfade:
@@ -319,9 +324,8 @@ class LatentSpace():
             params = params1 * a + params2 * b
             params_message = '-'.join([str(int(param)) for param in params])
             clientPd.send_message("/params", params_message)
-            if hasattr(self, 'synth') and self.synth:
-                print("parameters sent to play benjo: ", params_message)
-                self.synth.play(params_message)
+            #self.midi_parameters = params
+            #self.play_midi_parameters()
             time.sleep(time_per_point)
 
     def drawMeander_handler(self, address: str, *args):

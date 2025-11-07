@@ -15,15 +15,17 @@ class BenjolinSynth:
 		self.is_playing = False
 		self.connectGraph()
 
-	def connectGraph(self):
+	def connectGraph(self, parameters=None):
 		self.graph = AudioGraph(self.config)
-		self.synth = BenjolinPatch(self.startup_synth_parameters, self.graph) # generalize this class
+		# Use provided parameters or fall back to startup parameters
+		params = parameters if parameters is not None else self.startup_synth_parameters
+		self.synth = BenjolinPatch(params, self.graph)
 		# Don't auto-play on initialization
 
-	def resetGraph(self):
+	def resetGraph(self, parameters=None):
 		if self.graph:
 			self.graph.destroy()
-		self.connectGraph()
+		self.connectGraph(parameters)
 
 	def fadeParameters(self, new_parameters: list):
 		for i, new_p in enumerate(new_parameters):
@@ -40,17 +42,20 @@ class BenjolinSynth:
 
 	def play(self, synth_parameters: list):
 		'''Update parameters and start playing'''
-		try:
-			if not self.is_playing:
-				print(f"Graph not playing")
+		if not self.is_playing:
+			print(f"Graph not playing, starting playback")
+			try:
 				self.graph.play(self.synth)
 				self.is_playing = True
-			else:
-				print(f"Graph already playing")
-		except Exception as e:
-			# If already playing, just update parameters
-			print(f"Graph already playing, updating parameters only: {e}")
-			self.is_playing = True
+			except Exception as e:
+				# If node is already playing, reset and try again
+				print(f"Error starting graph, resetting: {e}")
+				self.resetGraph(synth_parameters)
+				self.graph.play(self.synth)
+				self.is_playing = True
+		else:
+			print(f"Graph already playing, updating parameters")
+		
 		self.fadeParameters(synth_parameters)
 
 	def stop(self):
@@ -58,6 +63,8 @@ class BenjolinSynth:
 		if self.is_playing and self.graph:
 			self.graph.stop()
 			self.is_playing = False
+			# Reset the graph to clear the playing state
+			self.resetGraph(self.startup_synth_parameters)
 
 
 class BenjolinPatch(Patch):
