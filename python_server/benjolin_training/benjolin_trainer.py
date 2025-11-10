@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.distributions as dists
 from torch.utils.data import SubsetRandomSampler
 import numpy as np
 import pickle
@@ -9,83 +10,71 @@ from dataloader import get_features
 
 
 class Encoder(nn.Module):
-    """VAE Encoder matching the saved model structure."""
-    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cpu'):
+    def __init__(self, input_dim, hidden_dim, latent_dim, activation, device):
         super(Encoder, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.latent_dim = latent_dim
         self.device = device
-        
-        # Dense layers before sequential
-        # From error: dense1 is (18, 36), dense2 is (18, 18), dense3 is (9, 18)
-        self.dense1 = nn.Linear(input_dim, hidden_dim)  # (18, 36)
-        self.dense2 = nn.Linear(hidden_dim, hidden_dim)  # (18, 18)
-        self.dense3 = nn.Linear(hidden_dim, hidden_dim // 2)  # (9, 18)
-        
-        # Sequential layers
-        # From error: seq.0 is (18, 36), seq.2 is (18, 18), seq.4 is (9, 18)
-        self.sequential = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),  # (18, 36)
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),  # (18, 18)
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim // 2),  # (9, 18)
-            nn.ReLU()
-        )
-        
-        # Output layers
-        # From error: denseMu and denseLogVar are (16, 9)
-        self.denseMu = nn.Linear(hidden_dim // 2, latent_dim)  # (16, 9)
-        self.denseLogVar = nn.Linear(hidden_dim // 2, latent_dim)  # (16, 9)
-    
+
+        self.dense1 = nn.Linear(self.input_dim, self.hidden_dim)
+        self.activation1 = nn.Sigmoid() if activation == 'sigmoid' else nn.ReLU() if activation == 'relu' else nn.Tanh()
+
+        self.dense2 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        self.activation2 = nn.Sigmoid() if activation == 'sigmoid' else nn.ReLU() if activation == 'relu' else nn.Tanh()
+
+        self.dense3 = nn.Linear(self.hidden_dim, self.hidden_dim // 2)
+        self.activation3 = nn.Sigmoid() if activation == 'sigmoid' else nn.ReLU() if activation == 'relu' else nn.Tanh()
+
+        self.sequential = nn.Sequential(self.dense1, self.activation1, self.dense2, self.activation2,
+                                        self.dense3, self.activation3)
+
+        self.denseMu = nn.Linear(self.hidden_dim // 2, self.latent_dim)
+        self.denseLogVar = nn.Linear(self.hidden_dim // 2, self.latent_dim)
+
+    def reparameterization(self, mu, log_variance):
+        sigma = 0.5 * torch.exp(log_variance)
+        return mu + sigma * dists.Normal(0, 1).sample(mu.shape).to(self.device)
+
     def forward(self, x):
-        # Use sequential block for encoding
-        x = self.sequential(x)
-        mu = self.denseMu(x)
-        logvar = self.denseLogVar(x)
-        z = self.reparameterize(mu, logvar)
-        return z, mu, logvar
+        h = self.sequential(x)
+        mu = self.denseMu(h)
+        log_variance = self.denseLogVar(h)
+
+        z = self.reparameterization(mu, log_variance)
+        return z, mu, log_variance
+
     
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-
 class Decoder(nn.Module):
-    """VAE Decoder matching the saved model structure."""
-    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cpu'):
+    def __init__(self, input_dim, hidden_dim, latent_dim, activation, device):
         super(Decoder, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.latent_dim = latent_dim
         self.device = device
-        
-        # Dense layers
-        # From error: dense1 is (9, 16), dense2 is (18, 9), dense3 is (18, 18), dense4 is (36, 18)
-        self.dense1 = nn.Linear(latent_dim, hidden_dim // 2)  # (9, 16)
-        self.dense2 = nn.Linear(hidden_dim // 2, hidden_dim)  # (18, 9)
-        self.dense3 = nn.Linear(hidden_dim, hidden_dim)  # (18, 18)
-        self.dense4 = nn.Linear(hidden_dim, input_dim)  # (36, 18)
-        
-        # Sequential layers
-        # From error: seq.0 is (9, 16), seq.2 is (18, 9), seq.4 is (18, 18), seq.6 is (36, 18)
-        self.sequential = nn.Sequential(
-            nn.Linear(latent_dim, hidden_dim // 2),  # (9, 16)
-            nn.ReLU(),
-            nn.Linear(hidden_dim // 2, hidden_dim),  # (18, 9)
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),  # (18, 18)
-            nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim)  # (36, 18)
-        )
+
+        self.dense1 = nn.Linear(self.latent_dim, self.hidden_dim // 2)
+        self.activation1 = nn.Sigmoid() if activation == 'sigmoid' else nn.ReLU() if activation == 'relu' else nn.Tanh()
+
+        self.dense2 = nn.Linear(self.hidden_dim // 2, self.hidden_dim)
+        self.activation2 = nn.Sigmoid() if activation == 'sigmoid' else nn.ReLU() if activation == 'relu' else nn.Tanh()
+
+        self.dense3 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        self.activation3 = nn.Sigmoid() if activation == 'sigmoid' else nn.ReLU() if activation == 'relu' else nn.Tanh()
+
+        self.dense4 = nn.Linear(self.hidden_dim, self.input_dim)
+        self.activation4 = nn.ReLU()
+
+        self.sequential = nn.Sequential(self.dense1, self.activation1, self.dense2, self.activation2, 
+                                        self.dense3, self.activation3, self.dense4) #, self.activation4)
     
     def forward(self, z):
-        z = torch.relu(self.dense1(z))
-        z = torch.relu(self.dense2(z))
-        z = torch.relu(self.dense3(z))
-        z = torch.relu(self.dense4(z))
-        return self.sequential(z)
+        x_hat = self.sequential(z)
+        return x_hat
 
 
 class VAE(nn.Module):
-    """Variational Autoencoder for audio feature encoding."""
-    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cpu'):
+    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cuda'):
         super(VAE, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
