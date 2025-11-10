@@ -17,7 +17,7 @@ import mido
 
 
 class LatentSpace():
-    def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150):
+    def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150, training_mode=False):
         self.dimensionality = dimensionality
         self.clientPd = clientPd
         self.clientJS = clientJS
@@ -32,15 +32,17 @@ class LatentSpace():
         self.path_cache = {}
         self.is_playing_crossfade = False
         self.is_playing_meander = False
-        # Initialize parameter handler delegation
-        self.param_handler = ParameterHandler(
-            clientJS=self.clientJS,
-            latent=self.latent
-        )
         # Initialize BenjolinSynth with random startup parameters
         N_params = 9  # 8 benjolin parameters + gain
         startup_synth_parameters = np.random.rand(N_params).tolist()
         self.synth = BenjolinSynth(startup_synth_parameters)
+        print("Training mode: ", training_mode)
+        self.param_handler = ParameterHandler(
+            clientJS=self.clientJS,
+            latent=self.latent,
+            synth=self.synth,
+            training_mode=training_mode
+        )
         
         # Initialize MIDI controller state (8 parameters + gain)
         self.midi_parameters = [0.5] * 9  # Default to middle values (0-1 range)
@@ -408,7 +410,7 @@ if __name__ == "__main__":
     server = BlockingOSCUDPServer((ip, listen_port), dispatcher)  # listener
 
     cloud = LatentSpace(dataset=dataset, clientPd=clientPd, clientJS=clientJS,
-                         dimensionality=dimensionality)
+                         dimensionality=dimensionality, training_mode=True)
 
 
     # dispatcher.map("/print", print_handler)

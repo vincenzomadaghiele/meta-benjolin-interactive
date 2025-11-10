@@ -1,14 +1,16 @@
 import numpy as np
 import threading
 import random
+import os
+import sys
 
 
 class ParameterHandler:
-    def __init__(self, clientJS, latent):
+    def __init__(self, clientJS, latent, synth, training_mode=False):
         self.data_dir = "./latent_param_dataset_16.npz"
         self.change_threshold = 0.02
         self.buffer_duration_seconds = 0.1
-
+        self.training_mode = training_mode
 
         self.clientJS = clientJS
         # Track last time we sent a drawBox to compute elapsed duration for previous box
@@ -21,6 +23,40 @@ class ParameterHandler:
         self.target_params_buffer = []
         self.buffer_timer = None
         self.buffer_lock = threading.Lock()
+        
+        # Initialize training components if training_mode is enabled
+        self.trainer = None
+        if self.training_mode:
+            print("Training mode ENABLED")
+            self.synth = synth
+            self._initialize_training_components()
+
+    def _initialize_training_components(self):
+        """Initialize BenjolinTrainer and BenjolinSynth for training mode."""
+        try:
+            # Add benjolin_training directory to path
+            training_dir = os.path.join(os.path.dirname(__file__), 'benjolin_training')
+            if training_dir not in sys.path:
+                sys.path.insert(0, training_dir)
+            
+            from benjolin_trainer import BenjolinTrainer
+            
+            # Initialize trainer with model from benjolin_training directory
+            model_path = os.path.join(training_dir, 'model')
+            self.trainer = BenjolinTrainer(
+                model_path=model_path,
+                latent_dim=16,
+                input_dim=36  # Must match the saved model's input dimension
+            )
+            print("BenjolinTrainer initialized successfully")
+            print("Training mode ENABLED: Will use VAE encoding for unknown parameters")
+            
+        except Exception as e:
+            print(f"Error initializing training components: {e}")
+            print("Training mode will be DISABLED")
+            self.training_mode = False
+            import traceback
+            traceback.print_exc()
 
     def getparameters_handler(self, source: str, *args):
         print(f"Received msg from source {source} with args {args}")
@@ -119,19 +155,52 @@ class ParameterHandler:
         if np.any(matches):
             selected_index = np.where(matches)[0][0]
             print(f"Exact match found at index {selected_index}")
+            x, y, z = dataset['reduced_latent_matrix'][selected_index]
         else:
             print("No exact match found even after integer conversion")
-            # Euclidean
-            distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
-            selected_index = np.argmin(distances)
-            # Manhattan distance
-            #distances = np.sum(np.abs(param_matrix_int - target_params_int), axis=1)
-            #selected_index = np.argmin(distances)
-            print(f"Closest match at index {selected_index}")
-
-        x, y, z = dataset['reduced_latent_matrix'][selected_index]
+            
+            # If training mode is enabled, generate coordinates from actual sound
+            if self.training_mode and self.trainer is not None and self.synth is not None:
+                print("Training mode: Generating coordinates from synthesized audio")
+                try:
+                    # Normalize parameters to 0-1 range (assuming they're in 0-127 range)
+                    #normalized_params = target_params_int / 127.0
+                    # Add gain parameter (use 0.5 as default)
+                    synth_params = np.append(target_params_int, 0.5).tolist()
+                    
+                    # Render audio with these parameters
+                    audio_buffer = self.synth.render_audio_as_buffer(synth_params, duration_seconds=1.0)
+                    
+                    # Get 3D coordinates from the trainer
+                    x, y, z = self.trainer.get_new_coordinates(audio_buffer)
+                    selected_index = -1  # Use -1 to indicate this is a generated point
+                    print(f"Generated coordinates from audio: x={x:.3f}, y={y:.3f}, z={z:.3f}")
+                    
+                except Exception as e:
+                    print(f"Error in training mode coordinate generation: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Fall back to closest match
+                    print("Falling back to closest match in dataset")
+                    distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
+                    selected_index = np.argmin(distances)
+                    x, y, z = dataset['reduced_latent_matrix'][selected_index]
+                    print(f"Closest match at index {selected_index}")
+            else:
+                # Training mode disabled or not available - use closest match
+                distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
+                selected_index = np.argmin(distances)
+                # Manhattan distance alternative:
+                #distances = np.sum(np.abs(param_matrix_int - target_params_int), axis=1)
+                #selected_index = np.argmin(distances)
+                x, y, z = dataset['reduced_latent_matrix'][selected_index]
+                print(f"Closest match at index {selected_index}")
+        
         print(f"Latent coordinates: x={x}, y={y}, z={z}")
-        print(f"Parameters of closest point:  {dataset['parameter_matrix'][selected_index]}")
+        if selected_index >= 0:
+            print(f"Parameters of closest point:  {dataset['parameter_matrix'][selected_index]}")
+        else:
+            print(f"Generated point (not in dataset) with target parameters: {target_params_int}")
         try:
             # Compute elapsed seconds since last drawBox
             import time

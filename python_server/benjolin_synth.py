@@ -1,6 +1,24 @@
 from signalflow import *
 import numpy as np
 import time
+import os
+import sys
+from contextlib import contextmanager
+
+@contextmanager
+def suppress_stdout_stderr():
+    """Context manager to suppress stdout and stderr."""
+    null_fds = [os.open(os.devnull, os.O_RDWR) for _ in range(2)]
+    save_fds = [os.dup(1), os.dup(2)]
+    os.dup2(null_fds[0], 1)
+    os.dup2(null_fds[1], 2)
+    try:
+        yield
+    finally:
+        os.dup2(save_fds[0], 1)
+        os.dup2(save_fds[1], 2)
+        for fd in null_fds + save_fds:
+            os.close(fd)
 
 class BenjolinSynth:
 	'''A synthesizer that loads a synthesis patch'''
@@ -16,7 +34,9 @@ class BenjolinSynth:
 		self.connectGraph()
 
 	def connectGraph(self, parameters=None):
-		self.graph = AudioGraph(self.config)
+		# Suppress AudioGraph status logs
+		with suppress_stdout_stderr():
+			self.graph = AudioGraph(self.config)
 		# Use provided parameters or fall back to startup parameters
 		params = parameters if parameters is not None else self.startup_synth_parameters
 		self.synth = BenjolinPatch(params, self.graph)
@@ -45,13 +65,15 @@ class BenjolinSynth:
 		if not self.is_playing:
 			print(f"Graph not playing, starting playback")
 			try:
-				self.graph.play(self.synth)
+				with suppress_stdout_stderr():
+					self.graph.play(self.synth)
 				self.is_playing = True
 			except Exception as e:
 				# If node is already playing, reset and try again
 				print(f"Error starting graph, resetting: {e}")
 				self.resetGraph(synth_parameters)
-				self.graph.play(self.synth)
+				with suppress_stdout_stderr():
+					self.graph.play(self.synth)
 				self.is_playing = True
 		else:
 			print(f"Graph already playing, updating parameters")
@@ -62,9 +84,56 @@ class BenjolinSynth:
 		'''Stop audio playback'''
 		if self.is_playing and self.graph:
 			self.graph.stop()
-			self.is_playing = False
-			# Reset the graph to clear the playing state
-			self.resetGraph(self.startup_synth_parameters)
+
+	def render_audio_as_buffer(self, synth_parameters: list, duration_seconds=1.0):
+		'''
+		Capture the currently playing audio with given parameters for analysis.
+		Does not interrupt playback - updates parameters and records output.
+		
+		Args:
+			synth_parameters: List of 9 parameters (8 benjolin + gain)
+			duration_seconds: Duration of audio to capture (default: 1.0 second)
+			
+		Returns:
+			numpy array: Captured audio buffer as 1D float32 array (mono)
+		'''
+		print(f"Capturing audio with parameters: {synth_parameters[:8]}...")  # Don't print gain
+		
+		# Calculate number of samples
+		num_samples = int(duration_seconds * self.config.sample_rate)
+		
+		# Create a buffer to store the captured audio
+		buffer = Buffer(1, num_samples)
+		
+		# Update the current synth with the new parameters
+		self.resetParameters(synth_parameters)
+		
+		# Create a BufferRecorder to capture the output without interrupting playback
+		recorder = BufferRecorder(buffer, self.synth.output)
+		
+		# Start the synth if not already playing
+		if not self.is_playing:
+			with suppress_stdout_stderr():
+				self.graph.play(self.synth)
+			self.is_playing = True
+		
+		# Start recording (runs in parallel with playback)
+		with suppress_stdout_stderr():
+			self.graph.play(recorder)
+		
+		# Wait for recording to complete
+		time.sleep(duration_seconds + 0.1)  # Add small buffer
+		
+		# Stop only the recorder, not the synth
+		with suppress_stdout_stderr():
+			recorder.stop()
+		
+		# Get the audio data from the buffer
+		audio_buffer = np.array(buffer.data[0][:num_samples], dtype=np.float32)
+		
+		print(f"Captured {len(audio_buffer)} samples")
+		# Return as 1D numpy array (mono) for get_features
+		return audio_buffer
 
 
 class BenjolinPatch(Patch):

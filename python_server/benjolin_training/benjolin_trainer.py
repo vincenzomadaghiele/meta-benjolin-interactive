@@ -1,0 +1,299 @@
+import torch
+import torch.nn as nn
+from torch.utils.data import SubsetRandomSampler
+import numpy as np
+import pickle
+import os
+from sklearn.decomposition import PCA
+from dataloader import get_features
+
+
+class Encoder(nn.Module):
+    """VAE Encoder matching the saved model structure."""
+    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cpu'):
+        super(Encoder, self).__init__()
+        self.device = device
+        
+        # Dense layers before sequential
+        # From error: dense1 is (18, 36), dense2 is (18, 18), dense3 is (9, 18)
+        self.dense1 = nn.Linear(input_dim, hidden_dim)  # (18, 36)
+        self.dense2 = nn.Linear(hidden_dim, hidden_dim)  # (18, 18)
+        self.dense3 = nn.Linear(hidden_dim, hidden_dim // 2)  # (9, 18)
+        
+        # Sequential layers
+        # From error: seq.0 is (18, 36), seq.2 is (18, 18), seq.4 is (9, 18)
+        self.sequential = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),  # (18, 36)
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),  # (18, 18)
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim // 2),  # (9, 18)
+            nn.ReLU()
+        )
+        
+        # Output layers
+        # From error: denseMu and denseLogVar are (16, 9)
+        self.denseMu = nn.Linear(hidden_dim // 2, latent_dim)  # (16, 9)
+        self.denseLogVar = nn.Linear(hidden_dim // 2, latent_dim)  # (16, 9)
+    
+    def forward(self, x):
+        # Use sequential block for encoding
+        x = self.sequential(x)
+        mu = self.denseMu(x)
+        logvar = self.denseLogVar(x)
+        z = self.reparameterize(mu, logvar)
+        return z, mu, logvar
+    
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+
+class Decoder(nn.Module):
+    """VAE Decoder matching the saved model structure."""
+    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cpu'):
+        super(Decoder, self).__init__()
+        self.device = device
+        
+        # Dense layers
+        # From error: dense1 is (9, 16), dense2 is (18, 9), dense3 is (18, 18), dense4 is (36, 18)
+        self.dense1 = nn.Linear(latent_dim, hidden_dim // 2)  # (9, 16)
+        self.dense2 = nn.Linear(hidden_dim // 2, hidden_dim)  # (18, 9)
+        self.dense3 = nn.Linear(hidden_dim, hidden_dim)  # (18, 18)
+        self.dense4 = nn.Linear(hidden_dim, input_dim)  # (36, 18)
+        
+        # Sequential layers
+        # From error: seq.0 is (9, 16), seq.2 is (18, 9), seq.4 is (18, 18), seq.6 is (36, 18)
+        self.sequential = nn.Sequential(
+            nn.Linear(latent_dim, hidden_dim // 2),  # (9, 16)
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, hidden_dim),  # (18, 9)
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),  # (18, 18)
+            nn.ReLU(),
+            nn.Linear(hidden_dim, input_dim)  # (36, 18)
+        )
+    
+    def forward(self, z):
+        z = torch.relu(self.dense1(z))
+        z = torch.relu(self.dense2(z))
+        z = torch.relu(self.dense3(z))
+        z = torch.relu(self.dense4(z))
+        return self.sequential(z)
+
+
+class VAE(nn.Module):
+    """Variational Autoencoder for audio feature encoding."""
+    def __init__(self, input_dim, hidden_dim, latent_dim, activation='sigmoid', device='cpu'):
+        super(VAE, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.latent_dim = latent_dim
+        self.device = device
+        self.encoder = Encoder(input_dim, hidden_dim, latent_dim, activation, self.device)
+        self.decoder = Decoder(input_dim, hidden_dim, latent_dim, activation, self.device)
+
+    def forward(self, x):
+        x = x.flatten()
+        z, _, _ = self.encoder(x)
+        x_hat = self.decoder(z)
+        return x_hat, z
+
+
+class BenjolinTrainer:
+    def __init__(self, model_path='./model', latent_dim=16, input_dim=36):
+        """
+        Initialize BenjolinTrainer with VAE and PCA models.
+        
+        Args:
+            model_path: Path to the saved VAE model weights
+            pca_model_path: Path to the saved PCA model
+            latent_dim: Dimensionality of VAE latent space (default: 16)
+            input_dim: Input feature dimension (default: 36 for bag-of-frames with 18 features * 2 stats)
+        """
+        self.latent_dim = latent_dim
+        self.input_dim = input_dim
+        
+        # Calculate hidden dimension
+        hidden_dim = input_dim // 2
+        
+        # Initialize VAE model with CPU device for macOS compatibility
+        self.vae = VAE(input_dim=input_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, device='cpu')
+        print("VAE model created")
+        
+        # Set default dtype
+        torch.set_default_dtype(torch.float32)
+        
+        # Load trained VAE weights
+        if os.path.exists(model_path):
+            self.vae.load_state_dict(torch.load(model_path, map_location='cpu'))
+            self.vae.eval()  # Set to evaluation mode
+            print(f"VAE model loaded from {model_path}")
+        else:
+            print(f"Warning: Model file not found at {model_path}. Using untrained model.")
+        
+        # Load dataset and fit PCA model
+        dataset_path = os.path.join(os.path.dirname(model_path), 'latent_param_dataset_16.npy.npz')
+        if os.path.exists(dataset_path):
+            print(f"Loading dataset from {dataset_path}")
+            dataset = np.load(dataset_path)
+            print(f"Available keys in dataset: {list(dataset.keys())}")
+            
+            # Extract latent matrix from dataset
+            if 'latent_matrix' in dataset:
+                latent_matrix = dataset['latent_matrix']
+                print(f"Fitting PCA on latent matrix of shape {latent_matrix.shape}")
+                self.pca_model = PCA(n_components=3)
+                self.pca_model.fit(latent_matrix)
+                print("PCA model fitted successfully")
+                print(f"PCA explained variance ratio: {self.pca_model.explained_variance_ratio_}")
+                
+                # Transform the training data to see the expected coordinate range
+                pca_coords = self.pca_model.transform(latent_matrix)
+                print(f"PCA coordinate ranges from training data:")
+                print(f"  x=[{pca_coords[:, 0].min():.2f}, {pca_coords[:, 0].max():.2f}]")
+                print(f"  y=[{pca_coords[:, 1].min():.2f}, {pca_coords[:, 1].max():.2f}]")
+                print(f"  z=[{pca_coords[:, 2].min():.2f}, {pca_coords[:, 2].max():.2f}]")
+                
+                # Store statistics for normalization
+                self.latent_mean = np.mean(latent_matrix, axis=0)
+                self.latent_std = np.std(latent_matrix, axis=0)
+                print(f"Latent mean range: [{self.latent_mean.min():.2f}, {self.latent_mean.max():.2f}]")
+                print(f"Latent std range: [{self.latent_std.min():.2f}, {self.latent_std.max():.2f}]")
+            elif 'reduced_latent_matrix' in dataset:
+                # If only reduced version exists, we'll use first 3 VAE dimensions
+                print("Only reduced_latent_matrix found. Will use first 3 VAE latent dimensions.")
+                reduced = dataset['reduced_latent_matrix']
+                print(f"Reduced latent matrix shape: {reduced.shape}")
+                print(f"Coordinate ranges: x=[{reduced[:, 0].min():.2f}, {reduced[:, 0].max():.2f}], "
+                      f"y=[{reduced[:, 1].min():.2f}, {reduced[:, 1].max():.2f}], "
+                      f"z=[{reduced[:, 2].min():.2f}, {reduced[:, 2].max():.2f}]")
+                self.pca_model = None
+                self.latent_mean = None
+                self.latent_std = None
+            else:
+                print("Warning: Could not find latent_matrix or reduced_latent_matrix in dataset.")
+                self.pca_model = None
+                self.latent_mean = None
+                self.latent_std = None
+        else:
+            print(f"Warning: Dataset file not found at {dataset_path}.")
+            self.pca_model = None
+            self.latent_mean = None
+            self.latent_std = None 
+
+    def get_new_coordinates(self, sound_buffer):
+        """
+        Encode audio buffer into 3D coordinates for visualization.
+        
+        Args:
+            sound_buffer: Audio signal as numpy array or torch tensor
+            
+        Returns:
+            tuple: (x, y, z) coordinates in 3D space, or None if PCA model not available
+        """
+        print(f"Processing audio buffer of length {len(sound_buffer)}")
+        
+        # Convert to torch tensor if needed
+        if isinstance(sound_buffer, np.ndarray):
+            sound_buffer = torch.from_numpy(sound_buffer).float()
+        
+        # Extract all features to match training: 13 MFCCs + spectral centroid + 4 audio features = 18 features
+        # Sample rate assumption (adjust if needed)
+        sample_rate = 44100
+        
+        # Extract MFCCs (13 coefficients)
+        import torchaudio
+        MFCC = torchaudio.transforms.MFCC(
+            sample_rate=sample_rate,
+            n_mfcc=13,
+            melkwargs={"n_fft": 1024, "win_length": 1024, "hop_length": 64, "pad": 0, "n_mels": 101, "center": False}
+        )
+        mfcc = MFCC(sound_buffer)  # Shape: (13, num_frames)
+        
+        # Extract spectral centroid
+        get_spectral_centroid = torchaudio.transforms.SpectralCentroid(
+            sample_rate=sample_rate,
+            n_fft=1024,
+            win_length=1024,
+            hop_length=64,
+            pad=0
+        )
+        sp_centroid = get_spectral_centroid(sound_buffer + 0.001).unsqueeze(0)  # Shape: (1, num_frames)
+        
+        # Extract 4 audio features using get_features
+        rms, zcr, spectral_flux, spectral_flatness = get_features(sound_buffer, device='cpu')
+        
+        # Find minimum frame count across all features to ensure consistent dimensions
+        min_frames = min(mfcc.shape[1], sp_centroid.shape[1], rms.shape[0], 
+                         zcr.shape[0], spectral_flux.shape[0], spectral_flatness.shape[0])
+        
+        # Truncate all features to the minimum frame count
+        mfcc = mfcc[:, :min_frames]
+        sp_centroid = sp_centroid[:, :min_frames]
+        rms = rms[:min_frames]
+        zcr = zcr[:min_frames]
+        spectral_flux = spectral_flux[:min_frames]
+        spectral_flatness = spectral_flatness[:min_frames]
+        
+        # Stack all features: 13 MFCCs + 1 centroid + 4 features = 18 features
+        features_tensor = torch.vstack([mfcc, sp_centroid, rms.unsqueeze(0), zcr.unsqueeze(0), 
+                                        spectral_flux.unsqueeze(0), spectral_flatness.unsqueeze(0)])
+        
+        # Compute mean and std for each feature (bag-of-frames representation)
+        mean = torch.mean(features_tensor, dim=1, keepdim=True)  # Shape: (18, 1)
+        std = torch.std(features_tensor, dim=1, keepdim=True)    # Shape: (18, 1)
+        
+        # Concatenate mean and std: 18 features × 2 = 36 dimensions
+        features = torch.hstack([mean, std]).flatten()  # Shape: (36,)
+        
+        # Debug: Check for NaN in features
+        if torch.isnan(features).any():
+            print("WARNING: NaN detected in features before encoding!")
+            print(f"Features: {features}")
+            print(f"Mean: {mean.flatten()}")
+            print(f"Std: {std.flatten()}")
+        
+        # Encode features into VAE latent space
+        with torch.no_grad():
+            z, mu, sigma = self.vae.encoder.forward(features)
+        
+        # Debug: Check for NaN in encoder output
+        if torch.isnan(mu).any():
+            print("ERROR: NaN detected in encoder output mu!")
+            print(f"mu: {mu}")
+            print(f"z: {z}")
+            print(f"sigma: {sigma}")
+            print("Returning default coordinates (0, 0, 0)")
+            return (0.0, 0.0, 0.0)
+        
+        # Convert to numpy
+        mu_np = mu.cpu().detach().numpy()
+        
+        # Check for NaN in numpy array
+        if np.isnan(mu_np).any():
+            print("ERROR: NaN detected in mu_np after conversion to numpy!")
+            print(f"mu_np: {mu_np}")
+            print("Returning default coordinates (0, 0, 0)")
+            return (0.0, 0.0, 0.0)
+        
+        # Reshape to 2D array for PCA (1 sample, 16 features)
+        latent_matrix = mu_np.reshape(1, -1)
+    
+        print("Latent matrix shape:", latent_matrix.shape)
+        print("Latent matrix:", latent_matrix)
+        
+        # Reduce dimensionality to 3D using PCA
+        if self.pca_model is not None:
+            print("Using PCA model for dimensionality reduction")
+            # Use transform (not fit) since PCA was already fitted during initialization
+            pca_latent = self.pca_model.transform(latent_matrix)
+            x, y, z = pca_latent[0]
+            print(f"Generated 3D coordinates: x={x:.3f}, y={y:.3f}, z={z:.3f}")
+            return (float(x), float(y), float(z))
+        else:
+            print("Warning: PCA model not available, returning first 3 latent dimensions")
+            x, y, z = mu_np[0], mu_np[1], mu_np[2]
+            return (float(x), float(y), float(z))
+            return tuple(mu_np[0, :3].tolist())
