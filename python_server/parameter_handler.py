@@ -176,6 +176,9 @@ class ParameterHandler:
                     selected_index = -1  # Use -1 to indicate this is a generated point
                     print(f"Generated coordinates from audio: x={x:.3f}, y={y:.3f}, z={z:.3f}")
                     
+                    # Add new point to dataset and visualization
+                    self._add_new_point_to_dataset(x, y, z, target_params_int)
+                    
                 except Exception as e:
                     print(f"Error in training mode coordinate generation: {e}")
                     import traceback
@@ -242,3 +245,94 @@ class ParameterHandler:
             self.prev_draw_coords = [x, y, z]
         except Exception as e:
             print(f"Error sending to Node.js: {e}")
+    
+    def _add_new_point_to_dataset(self, x, y, z, parameters):
+        """Add new generated point to dataset files and send to frontend for visualization.
+        
+        Args:
+            x, y, z: 3D coordinates
+            parameters: 8-element parameter array
+        """
+        try:
+            # Load existing dataset
+            dataset = np.load(self.data_dir)
+            
+            # Extract existing matrices
+            reduced_latent = dataset['reduced_latent_matrix']
+            param_matrix = dataset['parameter_matrix']
+            
+            # Create new point arrays
+            new_coord = np.array([[x, y, z]])
+            new_param = np.array([parameters])
+            
+            # Append to existing data
+            updated_reduced_latent = np.vstack([reduced_latent, new_coord])
+            updated_param_matrix = np.vstack([param_matrix, new_param])
+            
+            # Save updated dataset
+            np.savez(self.data_dir,
+                    reduced_latent_matrix=updated_reduced_latent,
+                    parameter_matrix=updated_param_matrix,
+                    latent_matrix=dataset.get('latent_matrix', np.array([])),
+                    sigma_matrix=dataset.get('sigma_matrix', np.array([])))
+            
+            print(f"Added new point to dataset: coords=({x:.3f}, {y:.3f}, {z:.3f}), params={parameters}")
+            
+            # Send new point to frontend for dynamic addition
+            self._send_new_point_to_frontend(x, y, z, parameters)
+            
+        except Exception as e:
+            print(f"Error adding point to dataset: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _update_dataset3d_js(self, x, y, z):
+        """Update the dataset3D.js file with new coordinate."""
+        try:
+            js_file_path = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D.js')
+            
+            # Read existing file
+            with open(js_file_path, 'r') as f:
+                content = f.read()
+            
+            # Find the x, y, z arrays and append new values
+            import re
+            
+            # Add to x array - find last number before closing bracket
+            x_pattern = r'("x":\s*\[[^\]]+)(\])'
+            content = re.sub(x_pattern, f'\\1,\n        {x}\\2', content, count=1)
+            
+            # Add to y array
+            y_pattern = r'("y":\s*\[[^\]]+)(\])'
+            content = re.sub(y_pattern, f'\\1,\n        {y}\\2', content, count=1)
+            
+            # Add to z array
+            z_pattern = r'("z":\s*\[[^\]]+)(\])'
+            content = re.sub(z_pattern, f'\\1,\n        {z}\\2', content, count=1)
+            
+            # Write back
+            with open(js_file_path, 'w') as f:
+                f.write(content)
+            
+            print(f"Updated dataset3D.js with new point")
+            
+        except Exception as e:
+            print(f"Error updating dataset3D.js: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _send_new_point_to_frontend(self, x, y, z, parameters):
+        """Send new point to frontend for real-time visualization update."""
+        try:
+            import json
+            message_data = {
+                'type': 'new_point',
+                'x': float(x),
+                'y': float(y),
+                'z': float(z),
+                'parameters': parameters.tolist()
+            }
+            self.clientJS.send_message("/newPoint", json.dumps(message_data))
+            print(f"Sent new point to frontend for visualization")
+        except Exception as e:
+            print(f"Error sending new point to frontend: {e}")

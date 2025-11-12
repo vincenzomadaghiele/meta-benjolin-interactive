@@ -324,6 +324,9 @@ function calculateCurrentCompostionTime(){
     return compositionTime
 }
 
+// Export for use in other modules
+export default calculateCurrentCompostionTime;
+
 
 
 // BOX --> CIRCLE

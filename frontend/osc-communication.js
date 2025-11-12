@@ -89,6 +89,36 @@ port.on("message", function (oscMessage) {
         const durationMs = oscMessage.args.length > 0 ? oscMessage.args[0] : null;
         console.log("Received drawMeander message", durationMs ? `with duration ${durationMs}ms` : "");
         drawMeander(durationMs);
+    } else if (oscMessage.address === "/newPoint") {
+        // Handle new point addition from training mode
+        try {
+            const jsonData = JSON.parse(oscMessage.args[0]);
+            const x = jsonData.x;
+            const y = jsonData.y;
+            const z = jsonData.z;
+            const parameters = jsonData.parameters;
+            
+            console.log(`Received new point: (${x}, ${y}, ${z}) with params:`, parameters);
+            
+            // Add point to scene (function is available on window from scatterplot.js)
+            if (typeof window.addNewPointToScene === 'function') {
+                window.addNewPointToScene(x, y, z);
+                console.log('New point added to 3D visualization');
+                
+                // After adding to scene, draw the box in the UI
+                // Use -1 as index to indicate it's a new generated point
+                const colorHue = Math.floor(Math.random() * 7) + 3; // Random color 3-9
+                const arrayIndex = -1; // Indicates new point not in original dataset
+                const prevElapsedSec = -1; // No previous elapsed time for first new point
+                
+                console.log(`Drawing box for new point: x=${x}, y=${y}, z=${z}`);
+                drawBox(x, y, z, colorHue, arrayIndex, prevElapsedSec);
+            } else {
+                console.error('addNewPointToScene function not available');
+            }
+        } catch (e) {
+            console.error('Error parsing newPoint message:', e);
+        }
     } else {
         console.log("Address did not match with any handler" + oscMessage.address);
     }

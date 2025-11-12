@@ -22,6 +22,10 @@ let particles;
 let renderer, scene, camera, material, controls, stats;
 let raycaster, intersects;
 let pointer, INTERSECTED;
+var SELECTED_ELEMENT = null;
+let canClick = false;
+const pickPosition = {x: 0, y: 0};
+let MOUSEONSCATTERPLOT = false;
 
 const PARTICLE_SIZE = 15;
 
@@ -278,8 +282,6 @@ const colorHsbToRgb = (h, s, b) => {
     return [255 * f(5), 255 * f(3), 255 * f(1)];
 };
 
-
-const pickPosition = {x: 0, y: 0}; // pick position in 2D space
 clearPickPosition();
 function getCanvasRelativePosition(event) {
     const rect = canvas.getBoundingClientRect();
@@ -330,8 +332,6 @@ canvas.onmouseup = function(){
     timer = endTime -startTime;
 }; 
 
-
-let MOUSEONSCATTERPLOT = false;
 document.getElementById("scatterPlot").addEventListener("mouseenter", function(  ) {
     MOUSEONSCATTERPLOT=true;
 });
@@ -355,6 +355,62 @@ function pointToBasic(pointIndex){
     material.needsUpdate = true
 }
 
+// Function to add a new point to the scene dynamically
+window.addNewPointToScene = function addNewPointToScene(x_coord, y_coord, z_coord) {
+    console.log(`Adding new point to scene: (${x_coord}, ${y_coord}, ${z_coord})`);
+    
+    // Transform coordinates to scene space
+    const this_x = x_coord * scale_x - (scale_x/2);
+    const this_y = y_coord * scale_y - (scale_y/2);
+    const this_z = z_coord * scale_z - (scale_z/2);
+    
+    // Get current geometry attributes
+    const positions = particles.geometry.attributes.position;
+    const colors = particles.geometry.attributes.customColor;
+    const sizes = particles.geometry.attributes.size;
+    const opacities = particles.geometry.attributes.opacity;
+    
+    // Create new arrays with one more element
+    const newPositions = new Float32Array(positions.count * 3 + 3);
+    const newColors = new Float32Array(colors.count * 3 + 3);
+    const newSizes = new Float32Array(sizes.count + 1);
+    const newOpacities = new Float32Array(opacities.count + 1);
+    
+    // Copy existing data
+    newPositions.set(positions.array);
+    newColors.set(colors.array);
+    newSizes.set(sizes.array);
+    newOpacities.set(opacities.array);
+    
+    // Add new point data
+    const newIndex = positions.count;
+    newPositions[newIndex * 3] = this_x;
+    newPositions[newIndex * 3 + 1] = this_y;
+    newPositions[newIndex * 3 + 2] = this_z;
+    
+    // Set color (green for new points)
+    newColors[newIndex * 3] = 0;
+    newColors[newIndex * 3 + 1] = 1;
+    newColors[newIndex * 3 + 2] = 0;
+    
+    // Set size and opacity
+    newSizes[newIndex] = PARTICLE_SIZE * 1.5; // Make new points slightly larger
+    newOpacities[newIndex] = 1.0; // Full opacity for new points
+    
+    // Update geometry attributes
+    particles.geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+    particles.geometry.setAttribute('customColor', new THREE.Float32BufferAttribute(newColors, 3));
+    particles.geometry.setAttribute('size', new THREE.Float32BufferAttribute(newSizes, 1));
+    particles.geometry.setAttribute('opacity', new THREE.Float32BufferAttribute(newOpacities, 1));
+    
+    // Mark for update
+    particles.geometry.attributes.position.needsUpdate = true;
+    particles.geometry.attributes.customColor.needsUpdate = true;
+    particles.geometry.attributes.size.needsUpdate = true;
+    particles.geometry.attributes.opacity.needsUpdate = true;
+    
+    console.log(`New point added. Total points: ${newIndex + 1}`);
+}
 
 
 
