@@ -143,6 +143,11 @@ class LatentSpace():
         return self.current_index
     
     def set_current_point(self, index):
+        # Validate index is within bounds
+        if index < 0 or index >= len(self.latent):
+            print(f"WARNING: Invalid index {index}, dataset has {len(self.latent)} points. Ignoring.")
+            return
+        
         print("Setting current point to index: ", index)
         self.current_index = index
         self.current_latent_coordinate = self.latent[self.current_index, :]
@@ -159,7 +164,9 @@ class LatentSpace():
         self.latent = np.squeeze(dataset['reduced_latent_matrix'][:, :self.dimensionality])
         self.parameter = np.squeeze(dataset['parameter_matrix'])
         self.kd_tree = KDTree(self.latent)
-        print(f"Dataset reloaded: {len(self.latent)} points")
+        # Clear path cache so meander/crossfade paths are recalculated with new indices
+        self.path_cache.clear()
+        print(f"Dataset reloaded: {len(self.latent)} points, path cache cleared")
     
     def get_index_given_latent(self, latent):
         distance, index = self.kd_tree.query(latent, k=1)
@@ -269,9 +276,17 @@ class LatentSpace():
         
     def play_box_handler(self, address: str, *args):
         print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
-        x, y, z= args[0], args[1], args[2]
-        index = self.get_index_given_latent([x, y, z])
-        print(f'index: {index}')
+        x, y, z = args[0], args[1], args[2]
+        
+        # If index is provided (4th argument), use it directly
+        if len(args) >= 4:
+            index = int(args[3])
+            print(f"Using provided index: {index}")
+        else:
+            # Fall back to KD-tree lookup if no index provided
+            index = self.get_index_given_latent([x, y, z])
+            print(f"Index from KD-tree lookup: {index}")
+        
         self.set_current_point(index=index)
         self.is_playing_crossfade = False
         self.is_playing_meander = False
