@@ -3,7 +3,8 @@ import threading
 import random
 import os
 import sys
-
+import time
+import json
 
 class ParameterHandler:
     def __init__(self, clientJS, latent, synth, training_mode=False):
@@ -13,6 +14,8 @@ class ParameterHandler:
         self.training_mode = training_mode
 
         self.clientJS = clientJS
+        self.latent_space = latent  # Store reference to latent space object
+        self.synth = synth  # Store synth reference for playback
         # Track last time we sent a drawBox to compute elapsed duration for previous box
         self._last_drawbox_time = None
 
@@ -23,12 +26,12 @@ class ParameterHandler:
         self.target_params_buffer = []
         self.buffer_timer = None
         self.buffer_lock = threading.Lock()
+        self.dataset_lock = threading.Lock()  # Lock for dataset file access
         
         # Initialize training components if training_mode is enabled
         self.trainer = None
         if self.training_mode:
             print("Training mode ENABLED")
-            self.synth = synth
             self._initialize_training_components()
 
     def _initialize_training_components(self):
@@ -136,10 +139,14 @@ class ParameterHandler:
         return duration_calculated if duration_calculated > 0 else 100 
 
     def find_closest_point(self, target_params):
-        dataset = np.load(self.data_dir)
-
-        # Convert both to integers for consistent comparison
-        param_matrix_int = dataset['parameter_matrix'].astype(int)
+        # Load dataset with lock, then release it
+        with self.dataset_lock:
+            dataset = np.load(self.data_dir)
+            # Convert both to integers for consistent comparison
+            param_matrix_int = dataset['parameter_matrix'].astype(int)
+            reduced_latent_matrix = dataset['reduced_latent_matrix'].copy()
+        
+        # All processing happens outside the lock
         target_params_int = np.array(target_params, dtype=int)
 
         # If incoming has fewer params, compare against first N
@@ -151,11 +158,16 @@ class ParameterHandler:
         matches = np.all(param_matrix_int == target_params_int[np.newaxis, :], axis=1)
         print(f"Number of exact matches found: {np.sum(matches)}")
 
+        # Normalize parameters from 0-127 range to 0-1 range (BenjolinPatch expects normalized values)
+        normalized_params = target_params_int / 127.0
+        # Add gain parameter (1.5 for 150% volume - louder but without distortion)
+        synth_params = np.append(normalized_params, 1).tolist()
+
         # Determine selected index (exact match preferred; otherwise closest by distance)
         if np.any(matches):
             selected_index = np.where(matches)[0][0]
             print(f"Exact match found at index {selected_index}")
-            x, y, z = dataset['reduced_latent_matrix'][selected_index]
+            x, y, z = reduced_latent_matrix[selected_index]
         else:
             print("No exact match found even after integer conversion")
             
@@ -163,21 +175,15 @@ class ParameterHandler:
             if self.training_mode and self.trainer is not None and self.synth is not None:
                 print("Training mode: Generating coordinates from synthesized audio")
                 try:
-                    # Normalize parameters to 0-1 range (assuming they're in 0-127 range)
-                    #normalized_params = target_params_int / 127.0
-                    # Add gain parameter (use 0.5 as default)
-                    synth_params = np.append(target_params_int, 0.5).tolist()
-                    
                     # Render audio with these parameters
                     audio_buffer = self.synth.render_audio_as_buffer(synth_params, duration_seconds=1.0)
                     
                     # Get 3D coordinates from the trainer
                     x, y, z = self.trainer.get_new_coordinates(audio_buffer)
-                    selected_index = -1  # Use -1 to indicate this is a generated point
                     print(f"Generated coordinates from audio: x={x:.3f}, y={y:.3f}, z={z:.3f}")
                     
-                    # Add new point to dataset and visualization
-                    self._add_new_point_to_dataset(x, y, z, target_params_int)
+                    # Add new point to dataset and visualization (safe - lock is released)
+                    selected_index = self._add_new_point_to_dataset(x, y, z, target_params_int)
                     
                 except Exception as e:
                     print(f"Error in training mode coordinate generation: {e}")
@@ -187,7 +193,7 @@ class ParameterHandler:
                     print("Falling back to closest match in dataset")
                     distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
                     selected_index = np.argmin(distances)
-                    x, y, z = dataset['reduced_latent_matrix'][selected_index]
+                    x, y, z = reduced_latent_matrix[selected_index]
                     print(f"Closest match at index {selected_index}")
             else:
                 # Training mode disabled or not available - use closest match
@@ -196,17 +202,16 @@ class ParameterHandler:
                 # Manhattan distance alternative:
                 #distances = np.sum(np.abs(param_matrix_int - target_params_int), axis=1)
                 #selected_index = np.argmin(distances)
-                x, y, z = dataset['reduced_latent_matrix'][selected_index]
+                x, y, z = reduced_latent_matrix[selected_index]
                 print(f"Closest match at index {selected_index}")
         
         print(f"Latent coordinates: x={x}, y={y}, z={z}")
-        if selected_index >= 0:
-            print(f"Parameters of closest point:  {dataset['parameter_matrix'][selected_index]}")
+        if selected_index is not None and selected_index >= 0:
+            print(f"Parameters of closest point: index {selected_index}")
         else:
             print(f"Generated point (not in dataset) with target parameters: {target_params_int}")
         try:
-            # Compute elapsed seconds since last drawBox
-            import time
+            # Compute elapsed seconds since last drawBox 
             now = time.time()
             elapsed_prev_sec = None
             if self._last_drawbox_time is not None:
@@ -239,6 +244,7 @@ class ParameterHandler:
             elapsed_arg = elapsed_prev_sec if elapsed_prev_sec is not None else -1.0
             print(f"prev seconds: {elapsed_arg} index is {selected_index}")
             # 5th argument should be the dataset index for color lookup in the frontend
+            self.synth.play(synth_params)
             self.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(selected_index), elapsed_arg])
             print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
             # Update previous draw coordinates using raw values
@@ -269,6 +275,9 @@ class ParameterHandler:
             updated_reduced_latent = np.vstack([reduced_latent, new_coord])
             updated_param_matrix = np.vstack([param_matrix, new_param])
             
+            # Get the index of the newly added point (last index)
+            new_point_index = len(updated_reduced_latent) - 1
+            
             # Save updated dataset
             np.savez(self.data_dir,
                     reduced_latent_matrix=updated_reduced_latent,
@@ -276,10 +285,16 @@ class ParameterHandler:
                     latent_matrix=dataset.get('latent_matrix', np.array([])),
                     sigma_matrix=dataset.get('sigma_matrix', np.array([])))
             
-            print(f"Added new point to dataset: coords=({x:.3f}, {y:.3f}, {z:.3f}), params={parameters}")
+            print(f"Added new point to dataset at index {new_point_index}: coords=({x:.3f}, {y:.3f}, {z:.3f}), params={parameters}")
             
             # Send new point to frontend for dynamic addition
             self._send_new_point_to_frontend(x, y, z, parameters)
+            
+            # Reload dataset in latent space to update KD-tree
+            if hasattr(self, 'latent_space') and self.latent_space:
+                self.latent_space.reload_dataset()
+            
+            return new_point_index
             
         except Exception as e:
             print(f"Error adding point to dataset: {e}")
@@ -324,7 +339,6 @@ class ParameterHandler:
     def _send_new_point_to_frontend(self, x, y, z, parameters):
         """Send new point to frontend for real-time visualization update."""
         try:
-            import json
             message_data = {
                 'type': 'new_point',
                 'x': float(x),

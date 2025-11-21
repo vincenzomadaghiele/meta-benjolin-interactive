@@ -39,7 +39,7 @@ class LatentSpace():
         print("Training mode: ", training_mode)
         self.param_handler = ParameterHandler(
             clientJS=self.clientJS,
-            latent=self.latent,
+            latent=self,  # Pass the LatentSpace instance, not the numpy array
             synth=self.synth,
             training_mode=training_mode
         )
@@ -57,22 +57,17 @@ class LatentSpace():
         #self.clientPd.send_message("/stop", 1)
         params_message = '-'.join([str(int(param)) for param in self.current_parameters])
         self.clientPd.send_message("/params", params_message)
-        # Play synth with current parameters (scaled 0-1)
-        self.midi_parameters = self.current_parameters
-        print("Playing box with params: ", self.current_parameters)
-        self.play_midi_parameters()
+        # Play synth with current parameters from dataset (scaled 0-1)
+        normalized_params = self.current_parameters / 127.0
+        print("Playing box with normalized params: ", normalized_params)
+        if hasattr(self, 'synth') and self.synth:
+            self.synth.play(normalized_params)
 
     def stop_benjo(self):
         print("Stop is called")
         self.clientPd.send_message("/stop", 0)
         if hasattr(self, 'synth') and self.synth:
             self.synth.stop()
-    
-    def play_midi_parameters(self):
-        '''Play synth with current MIDI controller parameters'''
-        if hasattr(self, 'synth') and self.synth:
-            print(f"Playing MIDI parameters: {self.midi_parameters}")
-            self.synth.play(self.midi_parameters)
     
     def _midi_listener(self):
         '''Background thread that listens to MIDI controller input'''
@@ -83,12 +78,8 @@ class LatentSpace():
                         # Map first 8 CC controllers (CC 0-7) to parameters 0-7
                         # CC 8 maps to gain (parameter 8)
                         if msg.control < 9:
-                            # Convert MIDI value (0-127) to 0-1 range
-                            #normalized_value = msg.value / 127.0
                             self.midi_parameters[msg.control] = msg.value
-                            print(f"MIDI CC {msg.control}: {msg.value}")#-> {normalized_value:.3f}")
-                            # Play synth with updated parameters
-                            self.play_midi_parameters()
+                            print(f"MIDI CC {msg.control}: {msg.value}")
                             # Call getparameters_handler with MIDI parameters (only first 8, excluding gain)
                             try:
                                 params_to_send = self.midi_parameters[:8]
@@ -152,13 +143,23 @@ class LatentSpace():
         return self.current_index
     
     def set_current_point(self, index):
+        print("Setting current point to index: ", index)
         self.current_index = index
         self.current_latent_coordinate = self.latent[self.current_index, :]
         self.current_parameters = self.parameter[self.current_index, :]
+        print("Current parameters: ", self.current_parameters)
         self.play_benjo()
 
     def get_point_info(self, index):
         return self.latent[index, :], self.parameter[index, :]
+    
+    def reload_dataset(self):
+        """Reload dataset and rebuild KD-tree after new points are added"""
+        dataset = np.load('./latent_param_dataset_16.npz')
+        self.latent = np.squeeze(dataset['reduced_latent_matrix'][:, :self.dimensionality])
+        self.parameter = np.squeeze(dataset['parameter_matrix'])
+        self.kd_tree = KDTree(self.latent)
+        print(f"Dataset reloaded: {len(self.latent)} points")
     
     def get_index_given_latent(self, latent):
         distance, index = self.kd_tree.query(latent, k=1)
@@ -267,9 +268,10 @@ class LatentSpace():
             return path_of_indices
         
     def play_box_handler(self, address: str, *args):
-        #print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
+        print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
         x, y, z= args[0], args[1], args[2]
         index = self.get_index_given_latent([x, y, z])
+        print(f'index: {index}')
         self.set_current_point(index=index)
         self.is_playing_crossfade = False
         self.is_playing_meander = False
@@ -326,8 +328,6 @@ class LatentSpace():
             params = params1 * a + params2 * b
             params_message = '-'.join([str(int(param)) for param in params])
             clientPd.send_message("/params", params_message)
-            #self.midi_parameters = params
-            #self.play_midi_parameters()
             time.sleep(time_per_point)
 
     def drawMeander_handler(self, address: str, *args):

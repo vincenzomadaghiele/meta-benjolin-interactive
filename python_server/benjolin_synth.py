@@ -31,6 +31,7 @@ class BenjolinSynth:
 		self.config.sample_rate = sample_rate
 		self.startup_synth_parameters = startup_synth_parameters
 		self.is_playing = False
+		self.is_buffer_synth_playing = False  # Track buffer synth separately
 		self.connectGraph()
 
 	def connectGraph(self, parameters=None):
@@ -40,6 +41,7 @@ class BenjolinSynth:
 		# Use provided parameters or fall back to startup parameters
 		params = parameters if parameters is not None else self.startup_synth_parameters
 		self.synth = BenjolinPatch(params, self.graph)
+		self.synthForBuffer = BenjolinPatch(params, self.graph)
 		# Don't auto-play on initialization
 
 	def resetGraph(self, parameters=None):
@@ -55,7 +57,12 @@ class BenjolinSynth:
 
 	def resetParameters(self, new_parameters: list):
 		for i, new_p in enumerate(new_parameters):
-			self.synth.set_input(f"parameter-{i}", new_p) 
+			self.synth.set_input(f"parameter-{i}", new_p)
+
+	def resetBufferParameters(self, new_parameters: list):
+		"""Update synthForBuffer parameters independently from self.synth"""
+		for i, new_p in enumerate(new_parameters):
+			self.synthForBuffer.set_input(f"parameter-{i}", new_p) 
 
 	def getInputs(self):
 		return self.synth.inputs
@@ -76,7 +83,7 @@ class BenjolinSynth:
 					self.graph.play(self.synth)
 				self.is_playing = True
 		else:
-			print(f"Graph already playing, updating parameters")
+			print(f"Graph already playing, updating parameters with: {synth_parameters}")
 		
 		self.fadeParameters(synth_parameters)
 
@@ -87,8 +94,9 @@ class BenjolinSynth:
 
 	def render_audio_as_buffer(self, synth_parameters: list, duration_seconds=1.0):
 		'''
-		Capture the currently playing audio with given parameters for analysis.
-		Does not interrupt playback - updates parameters and records output.
+		Capture audio with given parameters for analysis WITHOUT producing audible sound.
+		Uses synthForBuffer with zero gain to silently render audio.
+		Does not interrupt playback from self.synth.
 		
 		Args:
 			synth_parameters: List of 9 parameters (8 benjolin + gain)
@@ -105,17 +113,20 @@ class BenjolinSynth:
 		# Create a buffer to store the captured audio
 		buffer = Buffer(1, num_samples)
 		
-		# Update the current synth with the new parameters
-		self.resetParameters(synth_parameters)
+		# Create parameters with zero gain for silent rendering
+		silent_params = synth_parameters[:8] + [0.0]  # Use first 8 params + zero gain
+		
+		# Update synthForBuffer with silent parameters (doesn't affect self.synth)
+		self.resetBufferParameters(silent_params)
 		
 		# Create a BufferRecorder to capture the output without interrupting playback
-		recorder = BufferRecorder(buffer, self.synth.output)
+		recorder = BufferRecorder(buffer, self.synthForBuffer.output)
 		
-		# Start the synth if not already playing
-		if not self.is_playing:
+		# Start the buffer synth if not already playing
+		if not self.is_buffer_synth_playing:
 			with suppress_stdout_stderr():
-				self.graph.play(self.synth)
-			self.is_playing = True
+				self.graph.play(self.synthForBuffer)
+			self.is_buffer_synth_playing = True
 		
 		# Start recording (runs in parallel with playback)
 		with suppress_stdout_stderr():

@@ -1,5 +1,6 @@
 name: benjo
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - bzip2=1.0.8=h80987f9_6
@@ -14,6 +15,10 @@ dependencies:
   - numpy
   - scikit-learn
   - matplotlib
+  - pytest
+  - mido
+  - pytorch
+  - torchaudio
   - readline=8.2=h1a28f6b_0
   - setuptools=75.1.0=py312hca03da5_0
   - sqlite=3.45.3=h80987f9_0
@@ -22,9 +27,9 @@ dependencies:
   - wheel=0.44.0=py312hca03da5_0
   - xz=5.4.6=h80987f9_1
   - zlib=1.2.13=h18a0788_1
-  - pytest
   - pip:
       - python-osc==1.9.0
       - scipy==1.14.1
       - python-rtmidi
+      - signalflow
 prefix: /Users/vincemad/anaconda3/envs/benjo
