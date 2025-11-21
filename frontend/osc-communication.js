@@ -128,26 +128,37 @@ port.on("message", function (oscMessage) {
 var IS_PLAY_ON = false;
 
 // get x, y, z coordinates and play corresponding sound
-var sendBox = function (send_x, send_y, send_z){
+var sendBox = function (send_x, send_y, send_z, send_index){
     IS_PLAY_ON = true;
-    console.log(`🎵 PLAY BOX - Coordinates: x=${send_x}, y=${send_y}, z=${send_z}`);
+    console.log(`🎵 PLAY BOX - Coordinates: x=${send_x}, y=${send_y}, z=${send_z}, index=${send_index}`);
     console.log(`   Sending to Pure Data via /play/box`);
+    
+    const args = [
+        {
+            type: "f",
+            value: send_x
+        },
+        {
+            type: "f",
+            value: send_y
+        },
+        {
+            type: "f",
+            value: send_z
+        }
+    ];
+    
+    // Add index if provided
+    if (send_index !== undefined && send_index !== null) {
+        args.push({
+            type: "i",
+            value: send_index
+        });
+    }
+    
     port.send({
         address: "/play/box",
-        args: [
-            {
-                type: "f",
-                value: send_x
-            },
-            {
-                type: "f",
-                value: send_y
-            },
-            {
-                type: "f",
-                value: send_z
-            }
-        ]
+        args: args
     });
 }
 

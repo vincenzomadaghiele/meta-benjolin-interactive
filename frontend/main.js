@@ -941,7 +941,7 @@ function highlightAll (){
 
 const singlePlaybackTimeouts = [];
 function loopCrossfade( box_n ){
-    sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z);
+    sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, compositionArray[box_n-1].arrayIndex);
     sendCrossfade(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, 
         compositionArray[box_n+1].x, compositionArray[box_n+1].y, compositionArray[box_n+1].z, 
         compositionArray[box_n].duration / 1000);
@@ -958,7 +958,7 @@ function loopCrossfade( box_n ){
 }
 
 function loopMeander( box_n ){
-    sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z);
+    sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, compositionArray[box_n-1].arrayIndex);
     sendMeander(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, 
         compositionArray[box_n+1].x, compositionArray[box_n+1].y, compositionArray[box_n+1].z, 
         compositionArray[box_n].duration / 1000);
@@ -973,7 +973,7 @@ function loopMeander( box_n ){
 }
 
 function loopBox( box_n ){
-    sendBox( compositionArray[box_n].x, compositionArray[box_n].y, compositionArray[box_n].z );
+    sendBox( compositionArray[box_n].x, compositionArray[box_n].y, compositionArray[box_n].z, compositionArray[box_n].arrayIndex );
     let cursor_x = Number(compositionArray[box_n].x) * scale_x - (scale_x/2),
         cursor_y = Number(compositionArray[box_n].y) * scale_y - (scale_y/2),
         cursor_z = Number(compositionArray[box_n].z) * scale_z - (scale_z/2);
@@ -1011,7 +1011,7 @@ function playBox( box_n ){
             // loop the box
             loopBox( box_n );
         } else {
-            sendBox( compositionArray[box_n].x, compositionArray[box_n].y, compositionArray[box_n].z );
+            sendBox( compositionArray[box_n].x, compositionArray[box_n].y, compositionArray[box_n].z, compositionArray[box_n].arrayIndex );
             let cursor_x = Number(compositionArray[box_n].x) * scale_x - (scale_x/2),
                 cursor_y = Number(compositionArray[box_n].y) * scale_y - (scale_y/2),
                 cursor_z = Number(compositionArray[box_n].z) * scale_z - (scale_z/2);
@@ -1029,7 +1029,7 @@ function playBox( box_n ){
 
             } else {
                 // play crossfade only once
-                sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z);
+                sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, compositionArray[box_n-1].arrayIndex);
                 sendCrossfade(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, 
                     compositionArray[box_n+1].x, compositionArray[box_n+1].y, compositionArray[box_n+1].z, 
                     compositionArray[box_n].duration / 1000);    
@@ -1054,7 +1054,7 @@ function playBox( box_n ){
                 
             } else {
                 // play meander only once
-                sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z);
+                sendBox(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, compositionArray[box_n-1].arrayIndex);
                 sendMeander(compositionArray[box_n-1].x, compositionArray[box_n-1].y, compositionArray[box_n-1].z, 
                     compositionArray[box_n+1].x, compositionArray[box_n+1].y, compositionArray[box_n+1].z, 
                     compositionArray[box_n].duration / 1000);
@@ -1936,7 +1936,7 @@ class PickHelper {
                 particles.geometry.attributes.opacity.needsUpdate = true;
             }
             //console.log("picked ID: "+intersectedObjects[0].index);
-            sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex]);
+            sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
         } else {
             if (typeof IS_PLAY_ON === 'undefined' || IS_PLAY_ON) {
                 sendStop();

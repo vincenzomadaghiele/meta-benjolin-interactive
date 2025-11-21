@@ -13,9 +13,12 @@ const BASE_OPACITY = 0.7;
 
 
 // DATA
-const x = new Float32Array(dataset3D['x']); //.slice(0, 100);
-const y = new Float32Array(dataset3D['y']); //.slice(0, 100);
-const z = new Float32Array(dataset3D['z']); //.slice(0, 100);
+const x = new Float32Array(dataset3D_withcolors['x']); //.slice(0, 100);
+const y = new Float32Array(dataset3D_withcolors['y']); //.slice(0, 100);
+const z = new Float32Array(dataset3D_withcolors['z']); //.slice(0, 100);
+const r = new Float32Array(dataset3D_withcolors['r']); //.slice(0, 100);
+const g = new Float32Array(dataset3D_withcolors['g']); //.slice(0, 100);
+const b = new Float32Array(dataset3D_withcolors['b']); //.slice(0, 100);
 const N_POINTS = x.length;
 let particles;
 
@@ -216,7 +219,7 @@ class PickHelper {
                 //material.needsUpdate = true
             }
             //console.log("picked ID: "+intersectedObjects[0].index);
-            sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex]);
+            sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
         } else {
             sendStop();
         }
@@ -358,6 +361,57 @@ function pointToBasic(pointIndex){
 // Function to add a new point to the scene dynamically
 window.addNewPointToScene = function addNewPointToScene(x_coord, y_coord, z_coord) {
     console.log(`Adding new point to scene: (${x_coord}, ${y_coord}, ${z_coord})`);
+    
+    // Add to underlying data arrays (important for index synchronization)
+    const newIndex = x.length;
+    
+    // Extend the data arrays by creating new ones
+    const newX = new Float32Array(x.length + 1);
+    const newY = new Float32Array(y.length + 1);
+    const newZ = new Float32Array(z.length + 1);
+    const newR = new Float32Array(r.length + 1);
+    const newG = new Float32Array(g.length + 1);
+    const newB = new Float32Array(b.length + 1);
+    
+    // Copy existing data
+    newX.set(x);
+    newY.set(y);
+    newZ.set(z);
+    newR.set(r);
+    newG.set(g);
+    newB.set(b);
+    
+    // Derive RGB color from parameters (normalize from 0-127 to 0-1)
+    // Use first 3 parameters to determine RGB
+    let newR_val, newG_val, newB_val;
+    if (parameters && parameters.length >= 3) {
+        newR_val = parameters[0] / 127.0;
+        newG_val = parameters[1] / 127.0;
+        newB_val = parameters[2] / 127.0;
+    } else {
+        // Fallback to green if no parameters
+        newR_val = 0;
+        newG_val = 1;
+        newB_val = 0;
+    }
+    
+    // Add new point to data arrays
+    newX[newIndex] = x_coord;
+    newY[newIndex] = y_coord;
+    newZ[newIndex] = z_coord;
+    newR[newIndex] = 0; // Green color for new points
+    newG[newIndex] = 1;
+    newB[newIndex] = 0;
+    
+    // Update the global arrays (reassign to window to make them accessible)
+    window.x = newX;
+    window.y = newY;
+    window.z = newZ;
+    window.r = newR;
+    window.g = newG;
+    window.b = newB;
+    
+    console.log(`Updated data arrays. New length: ${newX.length}, new index: ${newIndex}`);
     
     // Transform coordinates to scene space
     const this_x = x_coord * scale_x - (scale_x/2);

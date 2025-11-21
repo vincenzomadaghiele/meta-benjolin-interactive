@@ -138,6 +138,38 @@ class BenjolinTrainer:
                 print("PCA model fitted successfully")
                 print(f"PCA explained variance ratio: {self.pca_model.explained_variance_ratio_}")
                 
+                # Load the reference dataset with stored coordinates to fix PCA signs
+                reference_dataset_path = os.path.join(os.path.dirname(model_path), '..', 'latent_param_dataset_16.npz')
+                if os.path.exists(reference_dataset_path):
+                    reference_dataset = np.load(reference_dataset_path)
+                    if 'reduced_latent_matrix' in reference_dataset:
+                        reduced_latent = reference_dataset['reduced_latent_matrix']
+                        
+                        # Transform first point with PCA
+                        first_pca = self.pca_model.transform(latent_matrix[0].reshape(1, -1))[0]
+                        first_stored = reduced_latent[0][:3]
+                        
+                        # Detect sign flips for each component
+                        sign_x = 1 if first_pca[0] * first_stored[0] > 0 else -1
+                        sign_y = 1 if first_pca[1] * first_stored[1] > 0 else -1
+                        sign_z = 1 if first_pca[2] * first_stored[2] > 0 else -1
+                        
+                        # Fix PCA component signs by flipping the components in the model
+                        if sign_x == -1:
+                            self.pca_model.components_[0] *= -1
+                        if sign_y == -1:
+                            self.pca_model.components_[1] *= -1
+                        if sign_z == -1:
+                            self.pca_model.components_[2] *= -1
+                        
+                        print(f"PCA component signs corrected: x={sign_x}, y={sign_y}, z={sign_z}")
+                        if sign_x == -1 or sign_y == -1 or sign_z == -1:
+                            print("  (Some components were flipped to match stored coordinates)")
+                    else:
+                        print("Warning: reduced_latent_matrix not found in reference dataset")
+                else:
+                    print(f"Warning: Reference dataset not found at {reference_dataset_path}")
+                
                 # Transform the training data to see the expected coordinate range
                 pca_coords = self.pca_model.transform(latent_matrix)
                 print(f"PCA coordinate ranges from training data:")
