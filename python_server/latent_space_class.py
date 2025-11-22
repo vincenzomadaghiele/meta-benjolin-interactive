@@ -281,7 +281,7 @@ class LatentSpace():
             return path_of_indices
         
     def play_box_handler(self, address: str, *args):
-        print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
+        #print(f'received msg: {address}, playing box coords {args[0]:.3f}, {args[1]:.3f} and {args[2]:.3f} ')
         x, y, z = args[0], args[1], args[2]
         
         # If index is provided (4th argument), use it directly
@@ -349,16 +349,17 @@ class LatentSpace():
                 return
             b = i / steps
             a = 1 - b
-            params = params1 * a + params2 * b
-            params_message = '-'.join([str(int(param)) for param in params])
-            clientPd.send_message("/params", params_message)
+            #params = params1 * a + params2 * b
+            #self.set_current_point(path_of_indices[i])
+            #params_message = '-'.join([str(int(param)) for param in params])
+            #clientPd.send_message("/params", params_message)
             time.sleep(time_per_point)
             # Check flag again after sleep to prevent overriding user clicks
             if not self.is_playing_crossfade:
                 return
 
     def drawMeander_handler(self, address: str, *args):
-        #print(f'received msg: {address}, sending draw meander coords {args[0]:.3f}, {args[1]:.3f} --> {args[2]:.3f}, {args[3]:.3f}')
+        print(f'received msg: {address}, sending draw meander coords {args[0]:.3f}, {args[1]:.3f} --> {args[2]:.3f}, {args[3]:.3f}')
         x1, y1, z1, x2, y2, z2 = args[0], args[1], args[2], args[3], args[4], args[5]
         path_of_indices = self.get_meander(x1, y1, z1, x2, y2, z2)
         path_of_latents = self.latent[path_of_indices, :]
@@ -449,6 +450,6 @@ if __name__ == "__main__":
     dispatcher.map("/startrecording", handler=cloud.startrecording_handler)
     dispatcher.map("/stoprecording", handler=cloud.stoprecording_handler)
     dispatcher.set_default_handler(handler=cloud.getparameters_handler)
-    #cloud.trainDatasetWithColors()
+    cloud.trainDatasetWithColors()
     print("Set up complete! Start playing the benjolin!")
     server.serve_forever()  # Blocks forever

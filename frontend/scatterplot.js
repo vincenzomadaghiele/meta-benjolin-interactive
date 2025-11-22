@@ -362,7 +362,7 @@ function pointToBasic(pointIndex){
 }
 
 // Function to add a new point to the scene dynamically
-window.addNewPointToScene = function addNewPointToScene(x_coord, y_coord, z_coord) {
+window.addNewPointToScene = function addNewPointToScene(x_coord, y_coord, z_coord, parameters) {
     console.log(`Adding new point to scene: (${x_coord}, ${y_coord}, ${z_coord})`);
     
     // Add to underlying data arrays (important for index synchronization)
@@ -384,27 +384,18 @@ window.addNewPointToScene = function addNewPointToScene(x_coord, y_coord, z_coor
     newG.set(g);
     newB.set(b);
     
-    // Derive RGB color from parameters (normalize from 0-127 to 0-1)
-    // Use first 3 parameters to determine RGB
-    let newR_val, newG_val, newB_val;
-    if (parameters && parameters.length >= 3) {
-        newR_val = parameters[0] / 127.0;
-        newG_val = parameters[1] / 127.0;
-        newB_val = parameters[2] / 127.0;
-    } else {
-        // Fallback to green if no parameters
-        newR_val = 0;
-        newG_val = 1;
-        newB_val = 0;
-    }
+    // Use red color for new points (matching backend)
+    const newR_val = 1.0;
+    const newG_val = 0.0;
+    const newB_val = 0.0;
     
     // Add new point to data arrays
     newX[newIndex] = x_coord;
     newY[newIndex] = y_coord;
     newZ[newIndex] = z_coord;
-    newR[newIndex] = 0; // Green color for new points
-    newG[newIndex] = 1;
-    newB[newIndex] = 0;
+    newR[newIndex] = newR_val;
+    newG[newIndex] = newG_val;
+    newB[newIndex] = newB_val;
     
     // Update the global arrays (reassign to window to make them accessible)
     window.x = newX;
@@ -467,6 +458,8 @@ window.addNewPointToScene = function addNewPointToScene(x_coord, y_coord, z_coor
     particles.geometry.attributes.opacity.needsUpdate = true;
     
     console.log(`New point added. Total points: ${newIndex + 1}`);
+    
+    return newIndex; // Return the index of the newly added point
 }
 
 

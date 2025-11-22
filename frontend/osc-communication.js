@@ -102,17 +102,20 @@ port.on("message", function (oscMessage) {
             
             // Add point to scene (function is available on window from scatterplot.js)
             if (typeof window.addNewPointToScene === 'function') {
-                window.addNewPointToScene(x, y, z);
-                console.log('New point added to 3D visualization');
+                const newPointIndex = window.addNewPointToScene(x, y, z, parameters);
+                console.log('New point added to 3D visualization at index:', newPointIndex);
                 
-                // After adding to scene, draw the box in the UI
-                // Use -1 as index to indicate it's a new generated point
-                const colorHue = Math.floor(Math.random() * 7) + 3; // Random color 3-9
-                const arrayIndex = -1; // Indicates new point not in original dataset
-                const prevElapsedSec = -1; // No previous elapsed time for first new point
-                
-                console.log(`Drawing box for new point: x=${x}, y=${y}, z=${z}`);
-                drawBox(x, y, z, colorHue, arrayIndex, prevElapsedSec);
+                // Wait for next animation frame to ensure geometry is fully updated
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        // After adding to scene, draw the box in the UI
+                        const colorHue = Math.floor(Math.random() * 7) + 3; // Random color 3-9
+                        const prevElapsedSec = -1; // No previous elapsed time for first new point
+                        
+                        console.log(`Drawing box for new point: x=${x}, y=${y}, z=${z}, index=${newPointIndex}`);
+                        drawBox(x, y, z, colorHue, newPointIndex, prevElapsedSec);
+                    });
+                }); // Double RAF ensures render is complete.
             } else {
                 console.error('addNewPointToScene function not available');
             }

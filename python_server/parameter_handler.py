@@ -290,6 +290,10 @@ class ParameterHandler:
             # Send new point to frontend for dynamic addition
             self._send_new_point_to_frontend(x, y, z, parameters)
             
+            # NOTE: Don't update dataset3D_withcolors.js during runtime as it causes dev server to reload the page
+            # Instead, regenerate it from the .npz file when restarting the server or run a separate script
+            # self._update_dataset3d_withcolors_js(x, y, z, r=1.0, g=0.0, b=0.0)  # Red color for new points
+            
             # Reload dataset in latent space to update KD-tree
             if hasattr(self, 'latent_space') and self.latent_space:
                 self.latent_space.reload_dataset()
@@ -301,16 +305,16 @@ class ParameterHandler:
             import traceback
             traceback.print_exc()
     
-    def _update_dataset3d_js(self, x, y, z):
-        """Update the dataset3D.js file with new coordinate."""
+    def _update_dataset3d_withcolors_js(self, x, y, z, r, g, b):
+        """Update the dataset3D_withcolors.js file with new coordinate and color."""
         try:
-            js_file_path = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D.js')
+            js_file_path = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js')
             
             # Read existing file
             with open(js_file_path, 'r') as f:
                 content = f.read()
             
-            # Find the x, y, z arrays and append new values
+            # Find the x, y, z, r, g, b arrays and append new values
             import re
             
             # Add to x array - find last number before closing bracket
@@ -325,14 +329,26 @@ class ParameterHandler:
             z_pattern = r'("z":\s*\[[^\]]+)(\])'
             content = re.sub(z_pattern, f'\\1,\n        {z}\\2', content, count=1)
             
+            # Add to r array
+            r_pattern = r'("r":\s*\[[^\]]+)(\])'
+            content = re.sub(r_pattern, f'\\1,\n        {r}\\2', content, count=1)
+            
+            # Add to g array
+            g_pattern = r'("g":\s*\[[^\]]+)(\])'
+            content = re.sub(g_pattern, f'\\1,\n        {g}\\2', content, count=1)
+            
+            # Add to b array
+            b_pattern = r'("b":\s*\[[^\]]+)(\])'
+            content = re.sub(b_pattern, f'\\1,\n        {b}\\2', content, count=1)
+            
             # Write back
             with open(js_file_path, 'w') as f:
                 f.write(content)
             
-            print(f"Updated dataset3D.js with new point")
+            print(f"Updated dataset3D_withcolors.js with new point (red color)")
             
         except Exception as e:
-            print(f"Error updating dataset3D.js: {e}")
+            print(f"Error updating dataset3D_withcolors.js: {e}")
             import traceback
             traceback.print_exc()
     
