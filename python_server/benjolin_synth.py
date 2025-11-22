@@ -91,6 +91,7 @@ class BenjolinSynth:
 		'''Stop audio playback'''
 		if self.is_playing and self.graph:
 			self.graph.stop()
+			self.is_playing = False  # Allow future play() calls to restart
 
 	def render_audio_as_buffer(self, synth_parameters: list, duration_seconds=1.0):
 		'''

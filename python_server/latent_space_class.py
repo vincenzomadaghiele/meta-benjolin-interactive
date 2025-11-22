@@ -45,7 +45,7 @@ class LatentSpace():
         )
         
         # Initialize MIDI controller state (8 parameters + gain)
-        self.midi_parameters = [0.5] * 9  # Default to middle values (0-1 range)
+        self.midi_parameters = [64] * 9  # Default to middle values (0-127 range, 64 is ~50%)
         self.midi_port = None
         self.midi_thread = None
         self.midi_listening = False
@@ -59,6 +59,12 @@ class LatentSpace():
         self.clientPd.send_message("/params", params_message)
         # Play synth with current parameters from dataset (scaled 0-1)
         normalized_params = self.current_parameters / 127.0
+        # Add gain parameter if not present (dataset has 8 params, synth needs 9)
+        # Set gain to 1.0 (100%) to ensure audible volume
+        if len(normalized_params) == 8:
+            normalized_params = np.append(normalized_params, 1.0)
+        elif len(normalized_params) >= 9:
+            normalized_params[8] = 1.0  # Override existing gain
         print("Playing box with normalized params: ", normalized_params)
         if hasattr(self, 'synth') and self.synth:
             self.synth.play(normalized_params)
@@ -310,11 +316,14 @@ class LatentSpace():
         for i in range(length):
             if not self.is_playing_meander:
                 return
-            self.set_current_point(path_of_indices[i])
+            #self.set_current_point(path_of_indices[i])
             # params = cloud.parameter[path_of_indices[i], :]
             # params_message = '-'.join([str(int(param)) for param in params])
             # clientPd.send_message("/params", params_message)
             time.sleep(time_per_point)
+            # Check flag again after sleep to prevent overriding user clicks
+            if not self.is_playing_meander:
+                return
 
     def play_crossfade_handler(self, address: str, *args):
         #print(f'received msg: {address}, playing crossfade coords {args[0]:.3f}, {args[1]:.3f} {args[2]:.3f} --> {args[3]:.3f}, {args[4]:.3f}, {args[5]:.3f} in {args[6]:.2f} s')
@@ -344,6 +353,9 @@ class LatentSpace():
             params_message = '-'.join([str(int(param)) for param in params])
             clientPd.send_message("/params", params_message)
             time.sleep(time_per_point)
+            # Check flag again after sleep to prevent overriding user clicks
+            if not self.is_playing_crossfade:
+                return
 
     def drawMeander_handler(self, address: str, *args):
         #print(f'received msg: {address}, sending draw meander coords {args[0]:.3f}, {args[1]:.3f} --> {args[2]:.3f}, {args[3]:.3f}')

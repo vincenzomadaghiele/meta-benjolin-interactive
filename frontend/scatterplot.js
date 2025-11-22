@@ -218,12 +218,15 @@ class PickHelper {
                 particles.geometry.attributes.customColor.needsUpdate = true;
                 //material.needsUpdate = true
             }
-            //console.log("picked ID: "+intersectedObjects[0].index);
-            sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
+            // Only send box if hovering over a different point
+            if (this.pickedObjectIndex !== CURRENTPICKEDINDEX) {
+                sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
+                CURRENTPICKEDINDEX = this.pickedObjectIndex;
+            }
         } else {
-            sendStop();
+            // Reset current index when not hovering over any point
+            CURRENTPICKEDINDEX = undefined;
         }
-        CURRENTPICKEDINDEX = this.pickedObjectIndex;
     }
     click(normalizedPosition, scene, camera, time) {
         // restore the color if there is a picked object

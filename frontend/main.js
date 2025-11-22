@@ -1935,14 +1935,15 @@ class PickHelper {
                 particles.geometry.attributes.opacity.array[ this.clickedObjectIndex ] = 1;
                 particles.geometry.attributes.opacity.needsUpdate = true;
             }
-            //console.log("picked ID: "+intersectedObjects[0].index);
-            sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
-        } else {
-            if (typeof IS_PLAY_ON === 'undefined' || IS_PLAY_ON) {
-                sendStop();
+            // Only send box if hovering over a different point
+            if (this.pickedObjectIndex !== CURRENTPICKEDINDEX) {
+                sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
+                CURRENTPICKEDINDEX = this.pickedObjectIndex;
             }
+        } else {
+            // Reset current index when not hovering over any point
+            CURRENTPICKEDINDEX = undefined;
         }
-        CURRENTPICKEDINDEX = this.pickedObjectIndex;
     }
     click(normalizedPosition, scene, camera, time) {
         // restore the color if there is a picked object
