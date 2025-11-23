@@ -410,7 +410,7 @@ class LatentSpace():
         """Delegate to DataTrainer for backward compatibility."""
         try:
             # Support both package and script execution contexts
-            from clustering.data_trainer import DataTrainer as _DT
+            from data_trainer import DataTrainer as _DT
         except Exception:
             _DT = DataTrainer
         trainer = _DT()
