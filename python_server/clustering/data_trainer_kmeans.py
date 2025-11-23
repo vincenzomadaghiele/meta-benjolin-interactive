@@ -17,7 +17,7 @@ class DataTrainerKMeans:
         self.output_csv = output_csv
         if frontend_js_path is None:
             frontend_js_path = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js')
+                os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'dataset3D_withcolors.js')
             )
         self.frontend_js_path = frontend_js_path
         self.n_clusters = int(n_clusters)

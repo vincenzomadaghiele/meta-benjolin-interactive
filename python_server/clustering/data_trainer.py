@@ -16,8 +16,9 @@ class DataTrainer:
         self.input_npz = input_npz
         self.output_csv = output_csv
         if frontend_js_path is None:
+            # Go up two levels: clustering/ -> python_server/ -> project_root/
             frontend_js_path = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js')
+                os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'dataset3D_withcolors.js')
             )
         self.frontend_js_path = frontend_js_path
         self.max_components = int(max_components)
@@ -147,7 +148,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--frontend-js",
         dest="frontend_js_path",
-        default=os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js')),
+        # Go up two levels: clustering/ -> python_server/ -> project_root/
+        default=os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'dataset3D_withcolors.js')),
         help="Path to output dataset3D_withcolors.js",
     )
     parser.add_argument("--max-components", dest="max_components", type=int, default=12, help="Max components to try for GMM BIC selection")
