@@ -407,10 +407,8 @@ class LatentSpace():
         return self.param_handler.getparameters_handler(address, *args)
 
     def trainDatasetWithColors(self):
-        """Delegate to DataTrainer for backward compatibility."""
         try:
-            # Support both package and script execution contexts
-            from clustering.data_trainer import DataTrainer as _DT
+            from clustering.cluster_by_gaussian import ClusterByGaussian as _DT
         except Exception:
             _DT = DataTrainer
         trainer = _DT()
@@ -450,6 +448,6 @@ if __name__ == "__main__":
     dispatcher.map("/startrecording", handler=cloud.startrecording_handler)
     dispatcher.map("/stoprecording", handler=cloud.stoprecording_handler)
     dispatcher.set_default_handler(handler=cloud.getparameters_handler)
-    cloud.trainDatasetWithColors()
+    cloud.trainDatasetWithColors() # Disable if clustering is not desired
     print("Set up complete! Start playing the benjolin!")
     server.serve_forever()  # Blocks forever

@@ -8,7 +8,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import to_hex
 
 
-class DataTrainer:
+class ClusterByGaussian:
     def __init__(self, input_npz: str = "./latent_param_dataset_16.npz",
                  output_csv: str = "./dataset_with_colors.csv",
                  frontend_js_path: str = None,

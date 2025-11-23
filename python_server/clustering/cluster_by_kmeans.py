@@ -3,14 +3,16 @@ import json
 import argparse
 import numpy as np
 from scipy.spatial import KDTree
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
 import matplotlib.cm as cm
+from matplotlib.colors import to_hex
 
 
-class DataTrainerDBScan:
+class ClusterByKMeans:
     def __init__(self, input_npz: str = "./latent_param_dataset_16.npz",
                  output_csv: str = "./dataset_with_colors.csv",
-                 frontend_js_path: str = None):
+                 frontend_js_path: str = None,
+                 n_clusters: int = 10):
         self.input_npz = input_npz
         self.output_csv = output_csv
         if frontend_js_path is None:
@@ -18,6 +20,7 @@ class DataTrainerDBScan:
                 os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'dataset3D_withcolors.js')
             )
         self.frontend_js_path = frontend_js_path
+        self.n_clusters = int(n_clusters)
 
     def train_dataset_with_colors(self):
         # 1) Load points (expecting 3D)
@@ -29,42 +32,40 @@ class DataTrainerDBScan:
             raise ValueError("Dataset has fewer than 3 dimensions; cannot export x,y,z.")
         points = pts[:, :3]
 
-        # 2) Cluster with DBSCAN (heuristic parameters)
-        kdt = KDTree(points)
-        dists, _ = kdt.query(points, k=2)  # k=2 to skip self-distance
-        nn = dists[:, 1]
-        median_nn = float(np.median(nn))
-        eps = 1.5 * median_nn if median_nn > 0 else 0.05
-        min_samples = max(5, int(round(points.shape[0] * 0.005)))  # ~0.5% or at least 5
+        # 2) Cluster with KMeans
+        print(f"Clustering with KMeans (k={self.n_clusters}) ...")
+        kmeans = KMeans(n_clusters=self.n_clusters, n_init=10, random_state=42)
+        labels = kmeans.fit_predict(points)
 
-        db = DBSCAN(eps=eps, min_samples=min_samples)
-        labels = db.fit_predict(points)
+        # Log cluster counts
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        print(f"Found {len(unique_labels)} clusters")
+        for lbl, cnt in zip(unique_labels, counts):
+            print(f" - Cluster {lbl}: {cnt} points")
 
-        # 3) Compute per-cluster closeness
-        unique_labels = np.unique(labels[labels >= 0])  # exclude noise (-1)
-        cluster_closeness = {}
+        # 3) Compute per-cluster compactness (mean distance to centroid)
+        cluster_compactness = {}
         for lbl in unique_labels:
             idx = np.where(labels == lbl)[0]
-            if idx.size <= 1:
-                cluster_closeness[lbl] = 0.0
+            if idx.size == 0:
+                cluster_compactness[lbl] = 0.0
                 continue
             pts_c = points[idx]
-            kdt_c = KDTree(pts_c)
-            d_c, _ = kdt_c.query(pts_c, k=2)
-            nn_c = d_c[:, 1]
-            mean_nn = float(np.mean(nn_c))
-            cluster_closeness[lbl] = mean_nn
+            centroid = kmeans.cluster_centers_[lbl]
+            dists = np.linalg.norm(pts_c - centroid, axis=1)
+            mean_dist = float(np.mean(dists))
+            cluster_compactness[lbl] = mean_dist
 
-        if len(cluster_closeness) > 0:
-            vals = np.array(list(cluster_closeness.values()))
+        # Map compactness (lower is tighter) to closeness in [0,1]
+        if len(cluster_compactness) > 0:
+            vals = np.array(list(cluster_compactness.values()))
             vmin, vmax = float(np.min(vals)), float(np.max(vals))
             if vmax > vmin:
-                for lbl, v in cluster_closeness.items():
-                    closeness = (vmax - v) / (vmax - vmin)
-                    cluster_closeness[lbl] = float(closeness)
+                cluster_closeness = {lbl: float((vmax - v) / (vmax - vmin)) for lbl, v in cluster_compactness.items()}
             else:
-                for lbl in cluster_closeness.keys():
-                    cluster_closeness[lbl] = 1.0
+                cluster_closeness = {lbl: 1.0 for lbl in cluster_compactness.keys()}
+        else:
+            cluster_closeness = {lbl: 0.0 for lbl in unique_labels}
 
         # 4) Map closeness to colors (RGB in [0,1])
         cmap = cm.get_cmap('viridis')
@@ -73,15 +74,15 @@ class DataTrainerDBScan:
             closeness = cluster_closeness.get(lbl, 0.0)
             r, g, b, _ = cmap(closeness)
             label_to_rgb[lbl] = (float(r), float(g), float(b))
-        noise_rgb = (0.5, 0.5, 0.5)
-
-        # 5) Assign RGB per point
-        colors = []
-        for lbl in labels:
-            if lbl == -1:
-                colors.append(noise_rgb)
-            else:
-                colors.append(label_to_rgb.get(lbl, noise_rgb))
+        # Log RGB and color meaning (closeness) per cluster
+        for lbl, cnt in zip(unique_labels, counts):
+            closeness = cluster_closeness.get(lbl, 0.0)
+            rgb = label_to_rgb.get(lbl, (0.5, 0.5, 0.5))
+            rgb_short = tuple(round(v, 3) for v in rgb)
+            hex_color = to_hex(rgb)
+            print(f"Cluster {int(lbl)}: closeness={closeness:.3f}, color rgb={rgb_short}, hex={hex_color}, members={int(cnt)}")
+        # 5) Assign RGB per point (no noise in kmeans)
+        colors = [label_to_rgb.get(lbl, (0.5, 0.5, 0.5)) for lbl in labels]
         colors = np.array(colors)
 
         # 6) Write CSV x,y,z,r,g,b
@@ -106,10 +107,8 @@ class DataTrainerDBScan:
         return {
             "output_csv": self.output_csv,
             "output_js": self.frontend_js_path,
-            "eps": eps,
-            "min_samples": min_samples,
             "n_clusters": int(len(unique_labels)),
-            "n_noise": int(np.sum(labels == -1)),
+            "cluster_counts": {int(lbl): int(cnt) for lbl, cnt in zip(unique_labels, counts)},
         }
 
 
@@ -123,12 +122,14 @@ if __name__ == "__main__":
         default=os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js')),
         help="Path to output dataset3D_withcolors.js",
     )
+    parser.add_argument("--k", dest="n_clusters", type=int, default=10, help="Number of clusters for KMeans")
     args = parser.parse_args()
 
     trainer = DataTrainer(
         input_npz=args.input_npz,
         output_csv=args.output_csv,
         frontend_js_path=args.frontend_js_path,
+        n_clusters=args.n_clusters,
     )
     info = trainer.train_dataset_with_colors()
     print("Export complete:")
