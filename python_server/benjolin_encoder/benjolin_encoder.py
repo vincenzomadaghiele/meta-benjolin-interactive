@@ -219,6 +219,9 @@ class BenjolinEncoder:
         # Convert to torch tensor if needed
         if isinstance(sound_buffer, np.ndarray):
             sound_buffer = torch.from_numpy(sound_buffer).float()
+
+        print(f"Audio stats: min={sound_buffer.min():.4f}, max={sound_buffer.max():.4f}, std={sound_buffer.std():.4f}")
+
         
         # Extract all features to match training: 13 MFCCs + spectral centroid + 4 audio features = 18 features
         # Sample rate assumption (adjust if needed)
@@ -268,6 +271,10 @@ class BenjolinEncoder:
         
         # Concatenate mean and std: 18 features × 2 = 36 dimensions
         features = torch.hstack([mean, std]).flatten()  # Shape: (36,)
+
+        print("Features (36-dim) =", features)
+        print("Features hash:", hash(tuple(float(x) for x in features)))
+
         
         # Debug: Check for NaN in features
         if torch.isnan(features).any():
@@ -279,6 +286,8 @@ class BenjolinEncoder:
         # Encode features into VAE latent space
         with torch.no_grad():
             z, mu, sigma = self.vae.encoder.forward(features)
+            print("mu =", mu)
+            print("mu hash:", hash(tuple(float(x) for x in mu)))
         
         # Debug: Check for NaN in encoder output
         if torch.isnan(mu).any():
@@ -311,7 +320,7 @@ class BenjolinEncoder:
             # Use transform (not fit) since PCA was already fitted during initialization
             pca_latent = self.pca_model.transform(latent_matrix)
             x, y, z = pca_latent[0]
-            print(f"Generated 3D coordinates: x={x:.3f}, y={y:.3f}, z={z:.3f}")
+            print("PCA coords:", x, y, z)
             return (float(x), float(y), float(z))
         else:
             print("Warning: PCA model not available, returning first 3 latent dimensions")

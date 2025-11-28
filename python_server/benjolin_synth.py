@@ -114,8 +114,8 @@ class BenjolinSynth:
 		# Create a buffer to store the captured audio
 		buffer = Buffer(1, num_samples)
 		
-		# Create parameters with zero gain for silent rendering
-		silent_params = synth_parameters[:8] + [0.0]  # Use first 8 params + zero gain
+		# Use the provided parameters (including gain) for rendering
+		silent_params = synth_parameters  # Keep original gain so buffer contains actual signal
 		
 		# Update synthForBuffer with silent parameters (doesn't affect self.synth)
 		self.resetBufferParameters(silent_params)
@@ -123,13 +123,10 @@ class BenjolinSynth:
 		# Create a BufferRecorder to capture the output without interrupting playback
 		recorder = BufferRecorder(buffer, self.synthForBuffer.output)
 		
-		# Start the buffer synth if not already playing
-		if not self.is_buffer_synth_playing:
-			with suppress_stdout_stderr():
-				self.graph.play(self.synthForBuffer)
-			self.is_buffer_synth_playing = True
-		
-		# Start recording (runs in parallel with playback)
+		# Start recording by playing only the recorder node.
+		# The graph will evaluate synthForBuffer as an upstream dependency of recorder,
+		# but synthForBuffer itself is never played as a root node, so it will not
+		# be routed to the audio output device.
 		with suppress_stdout_stderr():
 			self.graph.play(recorder)
 		

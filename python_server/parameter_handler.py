@@ -222,9 +222,10 @@ class ParameterHandler:
             change_duration_ms = self._calculate_param_change_duration()
 
             # Decide visualization based on how big the change is vs. the previous draw coords
-            if self.prev_draw_coords is not None:
+            if self.prev_draw_coords is not None:   
                 prev = np.array(self.prev_draw_coords, dtype=float)
                 curr = np.array([x, y, z], dtype=float)
+                print(f"Prev coords: {self.prev_draw_coords}, Curr coords: {curr}, Diff: {curr - prev}") 
                 delta = float(np.linalg.norm(curr - prev))
                 print(f"Change magnitude: {delta:.4f} (threshold {self.change_threshold})")
                 if delta > self.change_threshold:
