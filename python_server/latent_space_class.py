@@ -14,10 +14,11 @@ import matplotlib.cm as cm
 from matplotlib.colors import to_hex
 import json
 import mido
+from clustering.cluster_by_gaussian import ClusterByGaussian
 
 
 class LatentSpace():
-    def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150, training_mode=False):
+    def __init__(self, dataset, clientPd, clientJS, dimensionality=3, k=150, encoding_mode=False):
         self.dimensionality = dimensionality
         self.clientPd = clientPd
         self.clientJS = clientJS
@@ -36,12 +37,12 @@ class LatentSpace():
         N_params = 9  # 8 benjolin parameters + gain
         startup_synth_parameters = np.random.rand(N_params).tolist()
         self.synth = BenjolinSynth(startup_synth_parameters)
-        print("Training mode: ", training_mode)
+        print("Encoding mode: ", encoding_mode)
         self.param_handler = ParameterHandler(
             clientJS=self.clientJS,
-            latent=self,  # Pass the LatentSpace instance, not the numpy array
+            latent=self,  
             synth=self.synth,
-            training_mode=training_mode
+            encoding_mode=encoding_mode
         )
         
         # Initialize MIDI controller state (8 parameters + gain)
@@ -407,13 +408,9 @@ class LatentSpace():
         return self.param_handler.getparameters_handler(address, *args)
 
     def trainDatasetWithColors(self):
-        try:
-            from clustering.cluster_by_gaussian import ClusterByGaussian as _DT
-        except Exception:
-            _DT = DataTrainer
-        trainer = _DT()
+        trainer = ClusterByGaussian()
         return trainer.train_dataset_with_colors()
-
+        
 
 
 def default_handler(address, *args):
@@ -436,7 +433,7 @@ if __name__ == "__main__":
     server = BlockingOSCUDPServer((ip, listen_port), dispatcher)  # listener
 
     cloud = LatentSpace(dataset=dataset, clientPd=clientPd, clientJS=clientJS,
-                         dimensionality=dimensionality, training_mode=True)
+                         dimensionality=dimensionality, encoding_mode=True)
 
 
     # dispatcher.map("/print", print_handler)

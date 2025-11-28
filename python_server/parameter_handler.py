@@ -7,11 +7,11 @@ import time
 import json
 
 class ParameterHandler:
-    def __init__(self, clientJS, latent, synth, training_mode=False):
+    def __init__(self, clientJS, latent, synth, encoding_mode=False):
         self.data_dir = "./latent_param_dataset_16.npz"
         self.change_threshold = 0.02
-        self.buffer_duration_seconds = 0.1
-        self.training_mode = training_mode
+        self.midi_buffer_duration_seconds = 0.1
+        self.encoding_mode = encoding_mode
 
         self.clientJS = clientJS
         self.latent_space = latent  # Store reference to latent space object
@@ -29,35 +29,35 @@ class ParameterHandler:
         self.dataset_lock = threading.Lock()  # Lock for dataset file access
         
         # Initialize training components if training_mode is enabled
-        self.trainer = None
-        if self.training_mode:
+        self.encoder = None
+        if self.encoding_mode:
             print("Training mode ENABLED")
-            self._initialize_training_components()
+            self._initialize_encoding_components()
 
-    def _initialize_training_components(self):
-        """Initialize BenjolinTrainer and BenjolinSynth for training mode."""
+    def _initialize_encoding_components(self):
+        """Initialize BenjolinEncoder and BenjolinSynth for training mode."""
         try:
-            # Add benjolin_training directory to path
-            training_dir = os.path.join(os.path.dirname(__file__), 'benjolin_training')
+            # Add benjolin_encoder directory to path
+            training_dir = os.path.join(os.path.dirname(__file__), 'benjolin_encoder')
             if training_dir not in sys.path:
                 sys.path.insert(0, training_dir)
             
-            from benjolin_trainer import BenjolinTrainer
+            from benjolin_encoder import BenjolinEncoder
             
-            # Initialize trainer with model from benjolin_training directory
+            # Initialize trainer with model from benjolin_encoder directory
             model_path = os.path.join(training_dir, 'model')
-            self.trainer = BenjolinTrainer(
+            self.encoder = BenjolinEncoder(
                 model_path=model_path,
                 latent_dim=16,
                 input_dim=36  # Must match the saved model's input dimension
             )
-            print("BenjolinTrainer initialized successfully")
-            print("Training mode ENABLED: Will use VAE encoding for unknown parameters")
+            print("BenjolinEncoder initialized successfully")
+            print("Encoding mode ENABLED: Will use VAE encoding for unknown parameters")
             
         except Exception as e:
-            print(f"Error initializing training components: {e}")
-            print("Training mode will be DISABLED")
-            self.training_mode = False
+            print(f"Error initializing encoding components: {e}")
+            print("Encoding mode will be DISABLED")
+            self.encoding_mode = False
             import traceback
             traceback.print_exc()
 
@@ -78,7 +78,7 @@ class ParameterHandler:
             if self.buffer_timer is not None:
                 self.buffer_timer.cancel()
 
-            self.buffer_timer = threading.Timer(self.buffer_duration_seconds, self._process_buffered_params)
+            self.buffer_timer = threading.Timer(self.midi_buffer_duration_seconds, self._process_buffered_params)
             self.buffer_timer.start()
 
     def _process_buffered_params(self):
@@ -93,7 +93,7 @@ class ParameterHandler:
                 self.buffer_timer = None
 
                 print(f"Processing buffered params after delay: {last_target_params}")
-                self.find_closest_point(last_target_params)
+                self.find_and_send_coordinates(last_target_params)
 
     def _calculate_param_change_duration(self):
         """Calculate how long parameters were changing in the buffer.
@@ -128,17 +128,17 @@ class ParameterHandler:
                 return 0
             # Calculate proportion of buffer that had changes
             proportion = change_end_index / (buffer_len - 1)
-            duration_ms = int(proportion * self.buffer_duration_seconds * 1000)
+            duration_ms = int(proportion * self.midi_buffer_duration_seconds * 1000)
         else:
             # Parameters are still changing or haven't stabilized long enough
             # Use full buffer duration
-            duration_ms = int(self.buffer_duration_seconds * 1000)
+            duration_ms = int(self.midi_buffer_duration_seconds * 1000)
         
         print(f"Buffer analysis: {buffer_len} entries, {stable_count} stable at end, threshold: {stabilization_threshold}")
         duration_calculated = max(duration_ms, 0)  # Ensure non-negative
         return duration_calculated if duration_calculated > 0 else 100 
 
-    def find_closest_point(self, target_params):
+    def find_and_send_coordinates(self, target_params):
         # Load dataset with lock, then release it
         with self.dataset_lock:
             dataset = np.load(self.data_dir)
@@ -172,14 +172,14 @@ class ParameterHandler:
             print("No exact match found even after integer conversion")
             
             # If training mode is enabled, generate coordinates from actual sound
-            if self.training_mode and self.trainer is not None and self.synth is not None:
-                print("Training mode: Generating coordinates from synthesized audio")
+            if self.encoding_mode and self.encoder is not None and self.synth is not None:
+                print("Encoding mode: Generating coordinates from synthesized audio")
                 try:
                     # Render audio with these parameters
                     audio_buffer = self.synth.render_audio_as_buffer(synth_params, duration_seconds=1.0)
                     
                     # Get 3D coordinates from the trainer
-                    x, y, z = self.trainer.get_new_coordinates(audio_buffer)
+                    x, y, z = self.encoder.get_new_coordinates(audio_buffer)
                     print(f"Generated coordinates from audio: x={x:.3f}, y={y:.3f}, z={z:.3f}")
                     
                     # Add new point to dataset and visualization (safe - lock is released)

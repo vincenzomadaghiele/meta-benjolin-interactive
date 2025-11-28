@@ -155,7 +155,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-components", dest="max_components", type=int, default=12, help="Max components to try for GMM BIC selection")
     args = parser.parse_args()
 
-    trainer = DataTrainer(
+    trainer = ClusterByGaussian(
         input_npz=args.input_npz,
         output_csv=args.output_csv,
         frontend_js_path=args.frontend_js_path,

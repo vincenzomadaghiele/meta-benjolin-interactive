@@ -90,10 +90,10 @@ class VAE(nn.Module):
         return x_hat, z
 
 
-class BenjolinTrainer:
+class BenjolinEncoder:
     def __init__(self, model_path='./model', latent_dim=16, input_dim=36):
         """
-        Initialize BenjolinTrainer with VAE and PCA models.
+        Initialize BenjolinEncoder with VAE and PCA models.
         
         Args:
             model_path: Path to the saved VAE model weights
@@ -317,4 +317,6 @@ class BenjolinTrainer:
             print("Warning: PCA model not available, returning first 3 latent dimensions")
             x, y, z = mu_np[0], mu_np[1], mu_np[2]
             return (float(x), float(y), float(z))
-            return tuple(mu_np[0, :3].tolist())
+
+# Backwards-compatible alias for older code that may still import BenjolinTrainer
+BenjolinTrainer = BenjolinEncoder
