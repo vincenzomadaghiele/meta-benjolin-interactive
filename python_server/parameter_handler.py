@@ -27,12 +27,21 @@ class ParameterHandler:
         self.buffer_timer = None
         self.buffer_lock = threading.Lock()
         self.dataset_lock = threading.Lock()  # Lock for dataset file access
+
+        # store latest gesture here, gets erased when eraseGestureBuffer() is called
+        self.gesture_buffer = []
         
         # Initialize training components if training_mode is enabled
         self.encoder = None
         if self.encoding_mode:
             print("Training mode ENABLED")
             self._initialize_encoding_components()
+
+    def getGestureBuffer(self):
+        return self.gesture_buffer
+
+    def eraseGestureBuffer(self):
+        self.gesture_buffer = []
 
     def _initialize_encoding_components(self):
         """Initialize BenjolinEncoder and BenjolinSynth for training mode."""
@@ -220,7 +229,7 @@ class ParameterHandler:
 
             # Calculate parameter change duration
             change_duration_ms = self._calculate_param_change_duration()
-
+            transition = None
             # Decide visualization based on how big the change is vs. the previous draw coords
             if self.prev_draw_coords is not None:   
                 prev = np.array(self.prev_draw_coords, dtype=float)
@@ -232,13 +241,16 @@ class ParameterHandler:
                     # Fast change - send crossfade with parameter change duration
                     self.clientJS.send_message("/drawCrossfade", change_duration_ms)
                     print(f"Sent /drawCrossfade with duration: {change_duration_ms}ms")
+                    transition = {"type":"crossfade", "duration":change_duration_ms }
                 else:
                     # Slow change - send meander with parameter change duration
                     self.clientJS.send_message("/drawMeander", change_duration_ms)
                     print(f"Sent /drawMeander with duration: {change_duration_ms}ms")
+                    transition = {"type":"meander", "duration":change_duration_ms }
             else:
                 self.clientJS.send_message("/drawMeander", change_duration_ms)
                 print(f"Sent /drawMeander (first draw) with duration: {change_duration_ms}ms")
+                transition = {"type":"meander", "duration":change_duration_ms }
 
             # Draw the box at the coordinates and include elapsed_prev_sec for previous box
             # If elapsed_prev_sec is None, send -1 to indicate unknown (first box)
@@ -250,6 +262,10 @@ class ParameterHandler:
             print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
             # Update previous draw coordinates using raw values
             self.prev_draw_coords = [x, y, z]
+
+            if transition: 
+                self.gesture_buffer.append(transition)
+            self.gesture_buffer.append({"type":"state", "x": x, "y":y, "z":z, "arrayIndex":int(selected_index), "duration":elapsed_arg})
         except Exception as e:
             print(f"Error sending to Node.js: {e}")
     

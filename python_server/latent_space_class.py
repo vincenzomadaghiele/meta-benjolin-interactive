@@ -50,6 +50,7 @@ class LatentSpace():
         self.midi_port = None
         self.midi_thread = None
         self.midi_listening = False
+        self.latest_move = []
 
         # Start MIDI listener automatically
         self.start_midi_listener()
@@ -91,9 +92,56 @@ class LatentSpace():
                             try:
                                 params_to_send = self.midi_parameters[:8]
                                 print(f"Sending {len(params_to_send)} parameters to handler: {params_to_send}")
-                                self.param_handler.getparameters_handler("midiListener", *params_to_send)
+                                move_states = self.param_handler.getparameters_handler("midiListener", *params_to_send)
+                                if move_states:
+                                    for state in move_states:
+                                        self.latest_move.append(state)
+                                        
                             except Exception as param_error:
                                 print(f"Error in getparameters_handler: {param_error}")
+                        if msg.control == 15 and msg.value==127:
+                            print()
+                            print('MODEL RESPONDING')
+                            print('-'*50)
+                            print()
+                            # pushed button to stop recording
+                            # stop recording and compute model response
+                            self.midi_listening = False
+                            latest_gesture = self.param_handler.getGestureBuffer()
+                            # compute symmetrical 
+                            mirror_plane = [1,1,1,0] # plane: Ax+By+Cz+D=0
+                            # n_square = mirror_plane[0]**2 + mirror_plane[1]**2 + mirror_plane[2]**2
+                            # load dataset
+                            dataset = np.load(self.param_handler.data_dir)
+                            param_matrix_int = dataset['parameter_matrix'].astype(int)
+                            reduced_latent_matrix = dataset['reduced_latent_matrix'].copy()
+                            response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, reverseTime=False)
+                            for state in response: 
+                                if state["type"] == "state":
+                                    x, y, z = state["x"], state["y"], state["z"]
+                                    self.play_box_handler("", x, y, z, state["arrayIndex"])
+                                    elapsed_arg = state["duration"] if state["duration"] != -1.0 else 1.0
+                                    self.param_handler.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(state["arrayIndex"]), elapsed_arg])
+                                    print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
+                                    time.sleep(elapsed_arg)
+                                elif state["type"] == "meander":
+                                    # self.param_handler.clientJS.send_message("/drawMeander", state["duration"])
+                                    self.param_handler.clientJS.send_message("/drawCrossfade", state["duration"])
+                                    print(f"Sent /drawMeander with duration: {state["duration"]}ms")
+                                    time.sleep(state["duration"]/1000)
+                                else:
+                                    self.param_handler.clientJS.send_message("/drawCrossfade", state["duration"])
+                                    print(f"Sent /drawCrossfade with duration: {state["duration"]}ms")
+                                    time.sleep(state["duration"]/1000)
+
+                            # visualize and play back model responses (and visualize on midi controller)
+                            # start recording again 
+                            self.param_handler.eraseGestureBuffer()
+                            print()
+                            print('RESPONSE ENDED')
+                            print('-'*50)
+                            print()
+                            self.midi_listening = True
                 time.sleep(0.01)  # Small delay to prevent CPU overuse
         except Exception as e:
             print(f"MIDI listener error: {e}")
@@ -101,6 +149,29 @@ class LatentSpace():
             traceback.print_exc()
             self.midi_listening = False
     
+    def computeSymmetricState(self, state, mirror_plane):
+        n_square = mirror_plane[0]**2 + mirror_plane[1]**2 + mirror_plane[2]**2
+        E = mirror_plane[0]*state["x"] + mirror_plane[1]*state["y"] + mirror_plane[2]*state["z"]
+        x_mirror = state["x"] - 2 * mirror_plane[0] * E / n_square
+        y_mirror = state["y"] - 2 * mirror_plane[1] * E / n_square
+        z_mirror = state["z"] - 2 * mirror_plane[2] * E / n_square
+        return x_mirror, y_mirror, z_mirror
+    
+    def computeSymmetricGesture(self, gesture, mirror_plane, reduced_latent_matrix, reverseTime=False):
+        response = []
+        for state in gesture:
+            if state["type"] == "state":
+                x_mirror, y_mirror, z_mirror = self.computeSymmetricState(state, mirror_plane)
+                # find array index
+                distances = np.linalg.norm(reduced_latent_matrix - np.array([x_mirror, y_mirror, z_mirror]).reshape(1,-1), axis=1)
+                selected_index = np.argmin(distances)
+                x_mirror, y_mirror, z_mirror = reduced_latent_matrix[selected_index]
+                print(f"Closest match at index {selected_index}")
+                response.append({"type":"state","x": x_mirror, "y":y_mirror, "z":z_mirror, "arrayIndex":int(selected_index), "duration":state['duration']})
+            else:
+                response.append(state)
+        return response
+
     def start_midi_listener(self, port_name=None):
         '''Start listening to MIDI controller input'''
         try:
@@ -433,7 +504,7 @@ if __name__ == "__main__":
     server = BlockingOSCUDPServer((ip, listen_port), dispatcher)  # listener
 
     cloud = LatentSpace(dataset=dataset, clientPd=clientPd, clientJS=clientJS,
-                         dimensionality=dimensionality, encoding_mode=True)
+                         dimensionality=dimensionality, encoding_mode=False)
 
 
     # dispatcher.map("/print", print_handler)
