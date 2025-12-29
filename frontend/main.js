@@ -27,7 +27,7 @@ let marker1_text, marker1_path, marker12_path, marker12_pathArray,
     marker7_text, marker7_path, marker7_pathArray;
 
 if (TIMELINE_ENABLED) {
-    R_timeline = Raphael("timeline", 100, verticaltimelineheight );
+    R_timeline = Raphael("timeline", 100, verticaltimelineheight);
     path_timeline = R_timeline.path("M25 0L25 "+(verticaltimelineheight)).attr({
         stroke: '#FFFFFF',
         'stroke-width': 1,
@@ -1072,82 +1072,82 @@ function playBox( box_n ){
 
 
 // INTERACTIONS AT BUTTONS
-document.getElementById("insert-crossfade").addEventListener("mouseover", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightNone(); 
-        event.target.style["cursor"] = "pointer";
-        textlog.innerHTML="Insert a new <b>crossfade</b>. <br><br> A <b>crossfade</b> is a smooth transition between two states of the system. <br><br> Place the newly created crossfade between two circles.";
-    } else {
-        textlog.innerHTML="Insert crossfade function is disabled during playback.";
-        event.target.style["cursor"] = "default";
-    }
-}); 
-document.getElementById("insert-crossfade").addEventListener("click", (event) => {
-    if ( !ISPLAYBACKON ){
-        SELECTED_ELEMENT = null;
-        highlightNone(); 
-        drawCrossfade();
-        textlog.innerHTML="Insert a new <b>crossfade</b>. <br><br> A <b>crossfade</b> is a smooth transition between two states of the system. <br><br> Place the newly created crossfade between two circles.";
-    } else {
-        textlog.innerHTML="Insert crossfade function is disabled during playback.";
-        event.target.style["cursor"] = "default";
-    }
-}); 
+// document.getElementById("insert-crossfade").addEventListener("mouseover", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightNone(); 
+//         event.target.style["cursor"] = "pointer";
+//         textlog.innerHTML="Insert a new <b>crossfade</b>. <br><br> A <b>crossfade</b> is a smooth transition between two states of the system. <br><br> Place the newly created crossfade between two circles.";
+//     } else {
+//         textlog.innerHTML="Insert crossfade function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
+//     }
+// }); 
+// document.getElementById("insert-crossfade").addEventListener("click", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         SELECTED_ELEMENT = null;
+//         highlightNone(); 
+//         drawCrossfade();
+//         textlog.innerHTML="Insert a new <b>crossfade</b>. <br><br> A <b>crossfade</b> is a smooth transition between two states of the system. <br><br> Place the newly created crossfade between two circles.";
+//     } else {
+//         textlog.innerHTML="Insert crossfade function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
+//     }
+// }); 
 
-// INSERT MEANDER BUTTON
-document.getElementById("insert-meander").addEventListener("mouseover", (event) => {
-    if ( !ISPLAYBACKON ){    
-        highlightNone(); 
-        event.target.style["cursor"] = "pointer";
-        textlog.innerHTML="Insert a new <b>meander</b>. <br><br> A <b>meander</b> is a transition between two states of the system going through other states. <br><br> Place the newly created meander between two circles. ";
-    } else {
-        textlog.innerHTML="Insert meander function is disabled during playback.";
-        event.target.style["cursor"] = "default";
+// // INSERT MEANDER BUTTON
+// document.getElementById("insert-meander").addEventListener("mouseover", (event) => {
+//     if ( !ISPLAYBACKON ){    
+//         highlightNone(); 
+//         event.target.style["cursor"] = "pointer";
+//         textlog.innerHTML="Insert a new <b>meander</b>. <br><br> A <b>meander</b> is a transition between two states of the system going through other states. <br><br> Place the newly created meander between two circles. ";
+//     } else {
+//         textlog.innerHTML="Insert meander function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
-document.getElementById("insert-meander").addEventListener("click", (event) => {
-    if ( !ISPLAYBACKON ){
-        SELECTED_ELEMENT = null;
-        highlightNone(); 
-        drawMeander();
-        textlog.innerHTML="Insert a new <b>meander</b>. <br><br> A <b>meander</b> is a transition between two states of the system going through other states. <br><br> Place the newly created meander between two circles. ";
-    } else {
-        textlog.innerHTML="Insert meander function is disabled during playback.";
-        event.target.style["cursor"] = "default";
-    }
-}); 
+//     }
+// }); 
+// document.getElementById("insert-meander").addEventListener("click", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         SELECTED_ELEMENT = null;
+//         highlightNone(); 
+//         drawMeander();
+//         textlog.innerHTML="Insert a new <b>meander</b>. <br><br> A <b>meander</b> is a transition between two states of the system going through other states. <br><br> Place the newly created meander between two circles. ";
+//     } else {
+//         textlog.innerHTML="Insert meander function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
+//     }
+// }); 
 
-// TRASH BIN BUTTON
-document.getElementById("bin").addEventListener("mouseover", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightNone(); 
-        event.target.style["cursor"] = "pointer";
-        textlog.innerHTML="Delete selected element. ";
-    } else {
-        textlog.innerHTML="Delete element function is disabled during playback.";
-        event.target.style["cursor"] = "default";
+// // TRASH BIN BUTTON
+// document.getElementById("bin").addEventListener("mouseover", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightNone(); 
+//         event.target.style["cursor"] = "pointer";
+//         textlog.innerHTML="Delete selected element. ";
+//     } else {
+//         textlog.innerHTML="Delete element function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
-document.getElementById("bin").addEventListener("click", (event) => {
-    if ( !ISPLAYBACKON ){
-        if ( SELECTED_ELEMENT != null ){
-            // trash the element
-            removeElement(SELECTED_ELEMENT)
-            textlog.innerHTML="Delete selected element.";
-        } else {
-            textlog.innerHTML="Select an element to delete it";
-        }
-        SELECTED_ELEMENT = null;
-        highlightNone(); 
-    } else {
-        textlog.innerHTML="Delete element function is disabled during playback.";
-        event.target.style["cursor"] = "default";
-    }
-    let compositionTime = calculateCurrentCompostionTime();
-    if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
-}); 
+//     }
+// }); 
+// document.getElementById("bin").addEventListener("click", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         if ( SELECTED_ELEMENT != null ){
+//             // trash the element
+//             removeElement(SELECTED_ELEMENT)
+//             textlog.innerHTML="Delete selected element.";
+//         } else {
+//             textlog.innerHTML="Select an element to delete it";
+//         }
+//         SELECTED_ELEMENT = null;
+//         highlightNone(); 
+//     } else {
+//         textlog.innerHTML="Delete element function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
+//     }
+//     let compositionTime = calculateCurrentCompostionTime();
+//     if ( compositionTime >= MAX_COMPOSITION_DURATION){ COMPOSITION_BAR_ISFULL = true ; } else { COMPOSITION_BAR_ISFULL = false ; }
+// }); 
 
 function removeElement(element_index){
     
@@ -1183,30 +1183,30 @@ function removeElement(element_index){
 
 }
 
-// PLAY BUTTON
-document.getElementById("play").addEventListener("mouseover", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightAll(); 
-        event.target.style["cursor"] = "pointer";
-        textlog.innerHTML="Play the whole composition.";
-    } else {
-        textlog.innerHTML="Playback function is already executing.";
-        event.target.style["cursor"] = "default";
+// // PLAY BUTTON
+// document.getElementById("play").addEventListener("mouseover", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightAll(); 
+//         event.target.style["cursor"] = "pointer";
+//         textlog.innerHTML="Play the whole composition.";
+//     } else {
+//         textlog.innerHTML="Playback function is already executing.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
-document.getElementById("play").addEventListener("click", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightNone(); 
-        SELECTED_ELEMENT = null;
-        play();
-        textlog.innerHTML="Play the whole composition.";
-    } else {
-        textlog.innerHTML="Playback function is already executing.";
-        event.target.style["cursor"] = "default";
+//     }
+// }); 
+// document.getElementById("play").addEventListener("click", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightNone(); 
+//         SELECTED_ELEMENT = null;
+//         play();
+//         textlog.innerHTML="Play the whole composition.";
+//     } else {
+//         textlog.innerHTML="Playback function is already executing.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
+//     }
+// }); 
 
 var play = function(){
     var timeout = 0;
@@ -1267,17 +1267,17 @@ function disableAllInteractions(){
 }
 
 // STOP BUTTON
-document.getElementById("stop").addEventListener("mouseover", (event) => {
-    highlightNone(); 
-    event.target.style["cursor"] = "pointer";
-    textlog.innerHTML="Stop playback or recording.";
-}); 
-document.getElementById("stop").addEventListener("click", (event) => {
-    highlightNone(); 
-    SELECTED_ELEMENT = null;
-    stopPlayback();
-    textlog.innerHTML="Stop playback or recording.";
-}); 
+// document.getElementById("stop").addEventListener("mouseover", (event) => {
+//     highlightNone(); 
+//     event.target.style["cursor"] = "pointer";
+//     textlog.innerHTML="Stop playback or recording.";
+// }); 
+// document.getElementById("stop").addEventListener("click", (event) => {
+//     highlightNone(); 
+//     SELECTED_ELEMENT = null;
+//     stopPlayback();
+//     textlog.innerHTML="Stop playback or recording.";
+// }); 
 
 var stopPlayback = function(){
     console.log("stopped composition playback");
@@ -1326,84 +1326,84 @@ function enableAllInteractions(){
 // RECORD BUTTON
 let ISRECORDING = false;
 let stoprecordingtimeout = undefined;
-document.getElementById("record").addEventListener("mouseover", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightAll(); 
-        event.target.style["cursor"] = "pointer";
-        textlog.innerHTML="Record the whole composition. An audio recording of the composition will be saved to the disk.";
-    } else {
-        textlog.innerHTML="Recording function is disabled during playback.";
-        event.target.style["cursor"] = "default";
+// document.getElementById("record").addEventListener("mouseover", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightAll(); 
+//         event.target.style["cursor"] = "pointer";
+//         textlog.innerHTML="Record the whole composition. An audio recording of the composition will be saved to the disk.";
+//     } else {
+//         textlog.innerHTML="Recording function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
-document.getElementById("record").addEventListener("click", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightNone(); 
-        SELECTED_ELEMENT = null;
-        console.log('Starting recording');
-        sendStartrecording();
-        play();
-        ISRECORDING = true;
-        let maxrecordingduration = calculateCurrentCompostionTime();
-        stoprecordingtimeout = setTimeout(function() {
-            if( ISRECORDING ){
-                console.log('Stopping recording, file saved to disk');
-                sendStoprecording();
-                ISRECORDING = false;
-            }
-        }, maxrecordingduration+100);
-        textlog.innerHTML="Record the whole composition. An audio recording of the composition will be saved to the disk.";
-    } else {
-        textlog.innerHTML="Recording function is disabled during playback.";
-        event.target.style["cursor"] = "default";
+//     }
+// }); 
+// document.getElementById("record").addEventListener("click", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightNone(); 
+//         SELECTED_ELEMENT = null;
+//         console.log('Starting recording');
+//         sendStartrecording();
+//         play();
+//         ISRECORDING = true;
+//         let maxrecordingduration = calculateCurrentCompostionTime();
+//         stoprecordingtimeout = setTimeout(function() {
+//             if( ISRECORDING ){
+//                 console.log('Stopping recording, file saved to disk');
+//                 sendStoprecording();
+//                 ISRECORDING = false;
+//             }
+//         }, maxrecordingduration+100);
+//         textlog.innerHTML="Record the whole composition. An audio recording of the composition will be saved to the disk.";
+//     } else {
+//         textlog.innerHTML="Recording function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
+//     }
+// }); 
 
-// DOWNLOAD BUTTON
-document.getElementById("download").addEventListener("mouseover", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightNone(); 
-        event.target.style["cursor"] = "pointer";
-        textlog.innerHTML="Download the composition as a JSON file.";
-    } else {
-        textlog.innerHTML="You can't download during playback.";
-        event.target.style["cursor"] = "default";
+// // DOWNLOAD BUTTON
+// document.getElementById("download").addEventListener("mouseover", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightNone(); 
+//         event.target.style["cursor"] = "pointer";
+//         textlog.innerHTML="Download the composition as a JSON file.";
+//     } else {
+//         textlog.innerHTML="You can't download during playback.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
-document.getElementById("download").addEventListener("click", (event) => {
-    if ( !ISPLAYBACKON ){
-        highlightNone(); 
-        SELECTED_ELEMENT = null;
-        //play();
-        const myFile = new File([JSON.stringify(compositionArray, null, 2)], 'benjolin-composition.json');
-        //console.log(JSON.stringify(compositionArray));
+//     }
+// }); 
+// document.getElementById("download").addEventListener("click", (event) => {
+//     if ( !ISPLAYBACKON ){
+//         highlightNone(); 
+//         SELECTED_ELEMENT = null;
+//         //play();
+//         const myFile = new File([JSON.stringify(compositionArray, null, 2)], 'benjolin-composition.json');
+//         //console.log(JSON.stringify(compositionArray));
 
-        // Create a link and set the URL using `createObjectURL`
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = URL.createObjectURL(myFile);
-        link.download = myFile.name;
+//         // Create a link and set the URL using `createObjectURL`
+//         const link = document.createElement('a');
+//         link.style.display = 'none';
+//         link.href = URL.createObjectURL(myFile);
+//         link.download = myFile.name;
 
-        // It needs to be added to the DOM so it can be clicked
-        document.body.appendChild(link);
-        link.click();
+//         // It needs to be added to the DOM so it can be clicked
+//         document.body.appendChild(link);
+//         link.click();
 
-        // To make this work on Firefox we need to wait
-        // a little while before removing it.
-        setTimeout(() => {
-            URL.revokeObjectURL(link.href);
-            link.parentNode.removeChild(link);
-        }, 0);
-        textlog.innerHTML="Downloading the composition as a JSON file.";
-    } else {
-        textlog.innerHTML="Download function is disabled during playback.";
-        event.target.style["cursor"] = "default";
+//         // To make this work on Firefox we need to wait
+//         // a little while before removing it.
+//         setTimeout(() => {
+//             URL.revokeObjectURL(link.href);
+//             link.parentNode.removeChild(link);
+//         }, 0);
+//         textlog.innerHTML="Downloading the composition as a JSON file.";
+//     } else {
+//         textlog.innerHTML="Download function is disabled during playback.";
+//         event.target.style["cursor"] = "default";
 
-    }
-}); 
+//     }
+// }); 
 
 /*
 document.getElementById("remove-all").addEventListener("mouseover", (event) => {
