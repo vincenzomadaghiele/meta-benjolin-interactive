@@ -374,7 +374,7 @@ function updatPreviousBoxDurationAndHeight(newDurationMs){
     } catch (e) { /* no-op */ }
 }
 
-window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevElapsedSec){
+window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevElapsedSec, userOrAgent=0){
     console.log("drawBox", boxx, boxy, boxz, colorHue, arrayIndex)
     // Always allow adding boxes; no composition duration limit
     let newBox = document.createElement("div");
@@ -382,7 +382,11 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevEl
     newBox.className = 'box';
 
     // put out of draw box
-    document.getElementById("composition-bar").appendChild(newBox); 
+    if(userOrAgent == 0){
+        document.getElementById("composition-bar").appendChild(newBox); 
+    } else {
+        document.getElementById("composition-bar-2").appendChild(newBox); 
+    }
 
     let boxStartHeight = timesToPxHeight( BASIC_ELEMENT_T );
     var R = Raphael("box "+numBoxes, COMPOSITION_BAR_WIDTH_PX, boxStartHeight + MARGIN_PX );
@@ -452,39 +456,39 @@ window.drawBox = function drawBox(boxx, boxy, boxz, colorHue, arrayIndex, prevEl
                 textlog.innerHTML="Single element selection is disabled during playback.";
             }
     }); 
-    // CLICK INTERACTION
-    newBox.addEventListener("click", (event) => {
-            if ( !ISPLAYBACKON ){
-                for (var i = 0; i < singlePlaybackTimeouts.length; i++) {
-                    clearTimeout(singlePlaybackTimeouts[i]);
-                }
-                for (var i = 0; i < meanderPlaybackTimeouts.length; i++) {
-                    clearTimeout(meanderPlaybackTimeouts[i]);
-                }
-                for (var i = 0; i < crossfadePlaybackTimeouts.length; i++) {
-                    clearTimeout(crossfadePlaybackTimeouts[i]);
-                }
-                for (var i = 0; i < verticalAnimationTimeouts.length; i++) {
-                    clearTimeout(verticalAnimationTimeouts[i]);
-                    if (timeline_vertical_cursor_global && typeof timeline_vertical_cursor_global.remove === 'function') {
-                        timeline_vertical_cursor_global.remove();
-                    }
-                }
-                let item_index = Number(newBox.id.split(" ")[1])
-                SELECTED_ELEMENT = item_index;
-                //highlightBox( item_index ); 
-                playBox( item_index );
-                textlog.innerHTML="A <b>circle</b> represents a fixed state of the system <br><br> Click on the circle to listen to the corresponding state. <br><br> Drag the border of the circle to increase this state's duration in the composition. <br><br> Drag this element on another one to move it on top of it in the composition bar. ";
-            } else {
-                textlog.innerHTML="Single element selection is disabled during playback.";
-            }
-    }); 
-    // DRAG AND DROP INTERACTION
-    newBox.addEventListener('dragstart', dragStart);
-    newBox.addEventListener('dragenter', dragEnter)
-    newBox.addEventListener('dragover', dragOver);
-    newBox.addEventListener('dragleave', dragLeave);
-    newBox.addEventListener('drop', drop);
+    // // CLICK INTERACTION
+    // newBox.addEventListener("click", (event) => {
+    //         if ( !ISPLAYBACKON ){
+    //             for (var i = 0; i < singlePlaybackTimeouts.length; i++) {
+    //                 clearTimeout(singlePlaybackTimeouts[i]);
+    //             }
+    //             for (var i = 0; i < meanderPlaybackTimeouts.length; i++) {
+    //                 clearTimeout(meanderPlaybackTimeouts[i]);
+    //             }
+    //             for (var i = 0; i < crossfadePlaybackTimeouts.length; i++) {
+    //                 clearTimeout(crossfadePlaybackTimeouts[i]);
+    //             }
+    //             for (var i = 0; i < verticalAnimationTimeouts.length; i++) {
+    //                 clearTimeout(verticalAnimationTimeouts[i]);
+    //                 if (timeline_vertical_cursor_global && typeof timeline_vertical_cursor_global.remove === 'function') {
+    //                     timeline_vertical_cursor_global.remove();
+    //                 }
+    //             }
+    //             let item_index = Number(newBox.id.split(" ")[1])
+    //             SELECTED_ELEMENT = item_index;
+    //             //highlightBox( item_index ); 
+    //             playBox( item_index );
+    //             textlog.innerHTML="A <b>circle</b> represents a fixed state of the system <br><br> Click on the circle to listen to the corresponding state. <br><br> Drag the border of the circle to increase this state's duration in the composition. <br><br> Drag this element on another one to move it on top of it in the composition bar. ";
+    //         } else {
+    //             textlog.innerHTML="Single element selection is disabled during playback.";
+    //         }
+    // }); 
+    // // DRAG AND DROP INTERACTION
+    // newBox.addEventListener('dragstart', dragStart);
+    // newBox.addEventListener('dragenter', dragEnter)
+    // newBox.addEventListener('dragover', dragOver);
+    // newBox.addEventListener('dragleave', dragLeave);
+    // newBox.addEventListener('drop', drop);
 
     var duration = pxHeightToTimesMs(boxStartHeight); 
     compositionArray.push(new Box(boxx, boxy, boxz, duration, arrayIndex));
@@ -554,7 +558,7 @@ var up = function () {
 }
 
 // CROSSFADE
-window.drawCrossfade = function drawCrossfade(durationMs = null){
+window.drawCrossfade = function drawCrossfade(durationMs = null, userOrAgent=0){
     let compositionTime = calculateCurrentCompostionTime();
     // Require at least one Box to exist and be last before drawing a crossfade
     if (compositionArray.length === 0) {
@@ -569,7 +573,14 @@ window.drawCrossfade = function drawCrossfade(durationMs = null){
         let newBox = document.createElement("div");
         newBox.id = "box "+numBoxes;
         newBox.className = 'crossfade';
-        document.getElementById("composition-bar").appendChild(newBox); 
+        // document.getElementById("composition-bar").appendChild(newBox); 
+        // put out of draw box
+        if(userOrAgent == 0){
+            document.getElementById("composition-bar").appendChild(newBox); 
+        } else {
+            document.getElementById("composition-bar-2").appendChild(newBox); 
+        }
+
 
         const crossfadeDuration = durationMs !== null ? durationMs : BASIC_ELEMENT_T;
         let boxStartHeight = timesToPxHeightForTransitions( crossfadeDuration );
@@ -682,7 +693,7 @@ var up_crossfade = function () {
 };
 
 
-window.drawMeander = function drawMeander(durationMs = null){
+window.drawMeander = function drawMeander(durationMs = null, userOrAgent=0){
     let compositionTime = calculateCurrentCompostionTime();
     // Require at least one Box to exist and be last before drawing a meander
     if (compositionArray.length === 0) {
@@ -697,7 +708,12 @@ window.drawMeander = function drawMeander(durationMs = null){
         let newBox = document.createElement("div");
         newBox.id = "box "+numBoxes;
         newBox.className = 'meander';
-        document.getElementById("composition-bar").appendChild(newBox); 
+        // document.getElementById("composition-bar").appendChild(newBox); 
+        if(userOrAgent == 0){
+            document.getElementById("composition-bar").appendChild(newBox); 
+        } else {
+            document.getElementById("composition-bar-2").appendChild(newBox); 
+        }
 
         const meanderDuration = durationMs !== null ? durationMs : BASIC_ELEMENT_T;
         let boxStartHeight = timesToPxHeightForTransitions( meanderDuration );
@@ -1505,17 +1521,17 @@ var upListener = function(){
         }
     }
 }
-document.getElementById("scatterPlot").addEventListener("mousedown", downListener);
+// document.getElementById("scatterPlot").addEventListener("mousedown", downListener);
 document.getElementById("scatterPlot").addEventListener("mousemove", moveListener);
-document.getElementById("scatterPlot").addEventListener("mouseup", upListener);
+// document.getElementById("scatterPlot").addEventListener("mouseup", upListener);
 
 
 // SCATTERPLOT CLICK
-//document.getElementById("scatterPlot").addEventListener("click", (event) => {
-    // distinguish click from dragging
+// document.getElementById("scatterPlot").addEventListener("click", (event) => {
+//     distinguish click from dragging
 //    SELECTED_ELEMENT = null;
 //    highlightNone(event); 
-//});
+// });
 
 
 // dragging and dropping boxes
@@ -1937,7 +1953,7 @@ class PickHelper {
             }
             // Only send box if hovering over a different point
             if (this.pickedObjectIndex !== CURRENTPICKEDINDEX) {
-                sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
+                // sendBox(x[this.pickedObjectIndex], y[this.pickedObjectIndex], z[this.pickedObjectIndex], this.pickedObjectIndex);
                 CURRENTPICKEDINDEX = this.pickedObjectIndex;
             }
         } else {

@@ -74,11 +74,12 @@ port.on("message", function (oscMessage) {
         const colorHue = oscMessage.args[3];
         const arrayIndex = oscMessage.args[4];
         const prevElapsedSec = oscMessage.args[5];
+        const userOrAgent = oscMessage.args[6];
         
         console.log(`Calling drawBox with x=${x}, y=${y}, z=${z}, colorHue=${colorHue}, arrayIndex=${arrayIndex}`);
         
         // Call the drawBox function in main.js, passing prevElapsedSec (seconds) for previous box duration
-        drawBox(x, y, z, colorHue, arrayIndex, prevElapsedSec);
+        drawBox(x, y, z, colorHue, arrayIndex, prevElapsedSec, userOrAgent);
         // Also draw a point at the same coordinates in the 3D scene (retry if main.js not ready yet)
         callDrawPointAtWithRetry(x, y, z);
     } else if (oscMessage.address === "/drawCrossfade") {

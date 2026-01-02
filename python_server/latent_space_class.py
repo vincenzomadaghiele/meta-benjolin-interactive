@@ -35,8 +35,8 @@ class LatentSpace():
         self.is_playing_meander = False
         # Initialize BenjolinSynth with random startup parameters
         N_params = 9  # 8 benjolin parameters + gain
-        startup_synth_parameters = np.random.rand(N_params).tolist()
-        self.synth = BenjolinSynth(startup_synth_parameters)
+        startup_synth_parameters = np.random.rand(N_params)
+        self.synth = BenjolinSynth(startup_synth_parameters.tolist())
         print("Encoding mode: ", encoding_mode)
         self.param_handler = ParameterHandler(
             clientJS=self.clientJS,
@@ -46,8 +46,9 @@ class LatentSpace():
         )
         
         # Initialize MIDI controller state (8 parameters + gain)
-        self.midi_parameters = [64] * 9  # Default to middle values (0-127 range, 64 is ~50%)
+        self.midi_parameters = (startup_synth_parameters * 127).tolist()  # Default to middle values (0-127 range, 64 is ~50%)
         self.midi_port = None
+        self.midi_port_output = None
         self.midi_thread = None
         self.midi_listening = False
         self.latest_move = []
@@ -79,6 +80,9 @@ class LatentSpace():
     
     def _midi_listener(self):
         '''Background thread that listens to MIDI controller input'''
+        if self.midi_port_output:
+            for ctr, val in enumerate(self.midi_parameters):
+                self.midi_port_output.send(mido.Message('control_change', channel=0, control=int(ctr), value=int(val), time=0))
         try:
             while self.midi_listening:
                 for msg in self.midi_port.iter_pending():
@@ -116,23 +120,27 @@ class LatentSpace():
                             param_matrix_int = dataset['parameter_matrix'].astype(int)
                             reduced_latent_matrix = dataset['reduced_latent_matrix'].copy()
                             response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, reverseTime=False)
+
+                            # PLAY RESPONSE
                             for state in response: 
                                 if state["type"] == "state":
                                     x, y, z = state["x"], state["y"], state["z"]
                                     self.play_box_handler("", x, y, z, state["arrayIndex"])
-                                    elapsed_arg = state["duration"] if state["duration"] != -1.0 else 1.0
-                                    self.param_handler.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(state["arrayIndex"]), elapsed_arg])
+                                    elapsed_arg = state["duration"] if state["duration"] != -1.0 else 0.1
+                                    self.param_handler.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(state["arrayIndex"]), elapsed_arg, 1])
+                                    for pp, param_value in enumerate(param_matrix_int[int(state["arrayIndex"])]):
+                                        self.midi_port_output.send(mido.Message('control_change', channel=0, control=pp, value=param_value, time=0))
                                     print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
                                     time.sleep(elapsed_arg)
-                                elif state["type"] == "meander":
-                                    # self.param_handler.clientJS.send_message("/drawMeander", state["duration"])
-                                    self.param_handler.clientJS.send_message("/drawCrossfade", state["duration"])
-                                    print(f"Sent /drawMeander with duration: {state["duration"]}ms")
-                                    time.sleep(state["duration"]/1000)
-                                else:
-                                    self.param_handler.clientJS.send_message("/drawCrossfade", state["duration"])
-                                    print(f"Sent /drawCrossfade with duration: {state["duration"]}ms")
-                                    time.sleep(state["duration"]/1000)
+                                # elif state["type"] == "meander":
+                                #     # self.param_handler.clientJS.send_message("/drawMeander", state["duration"])
+                                #     self.param_handler.clientJS.send_message("/drawCrossfade", state["duration"])
+                                #     print(f"Sent /drawMeander with duration: {state["duration"]}ms")
+                                #     time.sleep(state["duration"]/1000)
+                                # else:
+                                #     self.param_handler.clientJS.send_message("/drawCrossfade", state["duration"])
+                                #     print(f"Sent /drawCrossfade with duration: {state["duration"]}ms")
+                                #     time.sleep(state["duration"]/1000)
 
                             # visualize and play back model responses (and visualize on midi controller)
                             # start recording again 
@@ -158,18 +166,31 @@ class LatentSpace():
         return x_mirror, y_mirror, z_mirror
     
     def computeSymmetricGesture(self, gesture, mirror_plane, reduced_latent_matrix, reverseTime=False):
+        mirrorCluster = False # mirror wrt cluster center
+        reverse = False # reverse playback order in time
+        # reverse time duration of states in the trajectory (long states become short and vice versa) 
+        # but total trajectory time is the same
+        reverseStateTimes = False 
+        alpha = 0.1 # scale in space
+        alpha = 1 # scale in space
         response = []
         for state in gesture:
             if state["type"] == "state":
-                x_mirror, y_mirror, z_mirror = self.computeSymmetricState(state, mirror_plane)
+                # x_mirror, y_mirror, z_mirror = self.computeSymmetricState(state, mirror_plane)
+                if not mirrorCluster:
+                    x_mirror, y_mirror, z_mirror = alpha*-state["x"], alpha*-state["y"],alpha*-state["z"]
+                else:
+                    pass
                 # find array index
                 distances = np.linalg.norm(reduced_latent_matrix - np.array([x_mirror, y_mirror, z_mirror]).reshape(1,-1), axis=1)
                 selected_index = np.argmin(distances)
                 x_mirror, y_mirror, z_mirror = reduced_latent_matrix[selected_index]
                 print(f"Closest match at index {selected_index}")
                 response.append({"type":"state","x": x_mirror, "y":y_mirror, "z":z_mirror, "arrayIndex":int(selected_index), "duration":state['duration']})
-            else:
-                response.append(state)
+            # else:
+            #     response.append(state)
+            if reverse:
+                response = list(reversed(response))
         return response
 
     def start_midi_listener(self, port_name=None):
@@ -191,6 +212,7 @@ class LatentSpace():
             
             print(f"Opening MIDI port: {selected_port}")
             self.midi_port = mido.open_input(selected_port)
+            self.midi_port_output = mido.open_output(selected_port)
             self.midi_listening = True
             
             # Start MIDI listener in background thread

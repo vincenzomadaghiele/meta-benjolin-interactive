@@ -227,7 +227,7 @@ class ParameterHandler:
                 elapsed_prev_sec = float(now - self._last_drawbox_time)
             self._last_drawbox_time = now
 
-            # Calculate parameter change duration
+            # # Calculate parameter change duration
             change_duration_ms = self._calculate_param_change_duration()
             transition = None
             # Decide visualization based on how big the change is vs. the previous draw coords
@@ -237,20 +237,25 @@ class ParameterHandler:
                 print(f"Prev coords: {self.prev_draw_coords}, Curr coords: {curr}, Diff: {curr - prev}") 
                 delta = float(np.linalg.norm(curr - prev))
                 print(f"Change magnitude: {delta:.4f} (threshold {self.change_threshold})")
-                if delta > self.change_threshold:
-                    # Fast change - send crossfade with parameter change duration
-                    self.clientJS.send_message("/drawCrossfade", change_duration_ms)
-                    print(f"Sent /drawCrossfade with duration: {change_duration_ms}ms")
-                    transition = {"type":"crossfade", "duration":change_duration_ms }
-                else:
-                    # Slow change - send meander with parameter change duration
-                    self.clientJS.send_message("/drawMeander", change_duration_ms)
-                    print(f"Sent /drawMeander with duration: {change_duration_ms}ms")
-                    transition = {"type":"meander", "duration":change_duration_ms }
-            else:
-                self.clientJS.send_message("/drawMeander", change_duration_ms)
-                print(f"Sent /drawMeander (first draw) with duration: {change_duration_ms}ms")
-                transition = {"type":"meander", "duration":change_duration_ms }
+                ### --------
+                ####### CROSSFADE TO DIFFERENTIATE MUSICIAN ACTION AND AGENT RESPONSE #######
+                self.clientJS.send_message("/drawCrossfade", 0)
+                ####### CROSSFADE TO DIFFERENTIATE MUSICIAN ACTION AND AGENT RESPONSE #######
+                ### --------
+            #     if delta > self.change_threshold:
+            #         # Fast change - send crossfade with parameter change duration
+            #         self.clientJS.send_message("/drawCrossfade", change_duration_ms)
+            #         print(f"Sent /drawCrossfade with duration: {change_duration_ms}ms")
+            #         transition = {"type":"crossfade", "duration":change_duration_ms }
+            #     else:
+            #         # Slow change - send meander with parameter change duration
+            #         self.clientJS.send_message("/drawMeander", change_duration_ms)
+            #         print(f"Sent /drawMeander with duration: {change_duration_ms}ms")
+            #         transition = {"type":"meander", "duration":change_duration_ms }
+            # else:
+            #     self.clientJS.send_message("/drawMeander", change_duration_ms)
+            #     print(f"Sent /drawMeander (first draw) with duration: {change_duration_ms}ms")
+            #     transition = {"type":"meander", "duration":change_duration_ms }
 
             # Draw the box at the coordinates and include elapsed_prev_sec for previous box
             # If elapsed_prev_sec is None, send -1 to indicate unknown (first box)
@@ -258,7 +263,7 @@ class ParameterHandler:
             print(f"prev seconds: {elapsed_arg} index is {selected_index}")
             # 5th argument should be the dataset index for color lookup in the frontend
             self.synth.play(synth_params)
-            self.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(selected_index), elapsed_arg])
+            self.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(selected_index), elapsed_arg, 0])
             print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
             # Update previous draw coordinates using raw values
             self.prev_draw_coords = [x, y, z]

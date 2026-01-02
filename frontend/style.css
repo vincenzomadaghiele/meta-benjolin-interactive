@@ -57,8 +57,14 @@ body {
 
 #composition-bar {
     position:absolute;
-    left: 50px; top: 120px;
+    left: 50px; top: 80px;
     float:left; display:inline; width: 150px;
+}
+
+#composition-bar-2 {
+    position:absolute;
+    left: 1300px; top: 80px;
+    float:right; display:inline; width: 150px;
 }
 
 .overlay {
