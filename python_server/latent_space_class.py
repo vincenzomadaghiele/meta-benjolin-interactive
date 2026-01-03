@@ -56,6 +56,10 @@ class LatentSpace():
 
         # open csv files
         cluster_centers = pd.read_csv('./cluster_centers.csv', header=None).values
+        self.M = 4
+        self.nu = 0.2
+        self.gestures_novelty = []
+        self.gestures_descriptors = []
 
 
         # Start MIDI listener automatically
@@ -117,6 +121,15 @@ class LatentSpace():
                             # stop recording and compute model response
                             self.midi_listening = False
                             latest_gesture = self.param_handler.getGestureBuffer()
+                            gesture_descriptors = self.computeGestureMetrics(latest_gesture)
+                            print(gesture_descriptors)
+
+                            # compute human musician gesture novelty
+                            if len(self.gestures_descriptors) > 0:
+                                # self.gestures_descriptors.append(gesture_descriptors)
+                                self.gestures_novelty.append(self.computeNoveltyScore(gesture_descriptors))
+                            self.gestures_descriptors.append(gesture_descriptors)
+                            
                             # compute symmetrical 
                             mirror_plane = [1,1,1,0] # plane: Ax+By+Cz+D=0
                             # n_square = mirror_plane[0]**2 + mirror_plane[1]**2 + mirror_plane[2]**2
@@ -127,8 +140,10 @@ class LatentSpace():
 
                             candidate_responses = []
                             responses_metrics = []
+                            candidates_novely = []
+                            candidates_hedonic = []
                             default_beta = 0.1
-                            default_gamma = 0.1
+                            default_gamma = 0.8
                             # COMPUTE ALL CANDIDATE RESPONSES
                             from operator import setitem
                             from functools import reduce
@@ -138,24 +153,42 @@ class LatentSpace():
                             up_to_m_of_n_true = lambda n, m: map(lambda inds: reduce(lambda a, ind: setitem(a, ind, True) or a,
                                                                                     inds, [False] * n),up_to_m_of_n(n, m))
                             permutations_of_parameters = list(up_to_m_of_n_true(5,2))
+                            print()
+                            print('COMPUTING RESPONSES')
                             for permutation in permutations_of_parameters:
+                                print(f'permutation: {permutation}')
                                 bb = 1 if permutation[3] else default_beta
                                 gg = 1 if permutation[4] else default_gamma
                                 response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, 
-                                                                        mirrorCluster = permutation[0], reverseTime=permutation[1], 
+                                                                        mirrorCluster=True, reverseTime=permutation[1], 
                                                                         reverseStateTimes=permutation[2], beta=bb, gamma=gg)
                                 candidate_responses.append(response)
-                                responses_metrics.append(self.computeGestureMetrics(response))
-                            # response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, reverseTime=False)
+                                candidate_descriptors = self.computeGestureMetrics(response)
+                                candidate_novely = self.computeNoveltyScore(candidate_descriptors)
+                                candidate_hedonic = self.computeHedonicValue(candidate_novely)
+                                responses_metrics.append(candidate_descriptors)
+                                candidates_novely.append(candidate_novely)
+                                candidates_hedonic.append(candidate_hedonic)
+                                print(f'candidate_descriptors: {candidate_descriptors}')
+                                print(f'candidate_novely: {candidate_novely}')
+                                print(f'candidate_hedonic: {candidate_hedonic}')
+                            print()
+                            print('CANDIDATES NOVELTIES')
+                            print(candidates_novely)
+                            print()
 
-                            # COMPUTE HEDONIC VALUE FOR EACH CANDIDATE
+                            max_hedonic_idx = max(enumerate(candidates_hedonic), key=lambda x: x[1])[0] 
+                            chosen_idx = max_hedonic_idx
+                            self.gestures_novelty.append(candidates_novely[chosen_idx])
+                            self.gestures_descriptors.append(responses_metrics[chosen_idx])
+                            response = candidate_responses[chosen_idx]
 
                             # PLAY SELECTED RESPONSE
                             for state in response: 
                                 if state["type"] == "state":
                                     x, y, z = state["x"], state["y"], state["z"]
                                     self.play_box_handler("", x, y, z, state["arrayIndex"])
-                                    elapsed_arg = state["duration"] if state["duration"] != -1.0 else 0.1
+                                    elapsed_arg = state["duration"] if state["duration"] > 0 else 0.1
                                     self.param_handler.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(state["arrayIndex"]), elapsed_arg, 1])
                                     for pp, param_value in enumerate(param_matrix_int[int(state["arrayIndex"])]):
                                         self.midi_port_output.send(mido.Message('control_change', channel=0, control=pp, value=param_value, time=0))
@@ -268,10 +301,34 @@ class LatentSpace():
             timbre_locality += distance_from_prev
             distances.append(distance_from_prev)
             time_differences.append(durations[i+1]-durations[i])
-        timbre_stability = np.array(distances).sum() / len(distances)
+        timbre_stability = np.array(distances).sum() / len(distances) if len(distances) > 0 else 0
         center_of_mass /= np.array(durations).sum()
-        temporal_stability = np.array(time_differences).sum() / len(time_differences)
-        return timbre_locality, timbre_stability, temporal_stability, center_of_mass
+        temporal_stability = np.array(time_differences).sum() / len(time_differences) if len(time_differences) > 0 else 0
+        print()
+        # print(f'points: {points}')
+        # print(f'distances: {distances}')
+        # print(f'time_differences: {time_differences}')
+        print(f'timbre_locality: {timbre_locality}')
+        print(f'timbre_stability: {timbre_stability}')
+        print(f'temporal_stability: {temporal_stability}')
+        print()
+        return timbre_locality, timbre_stability, temporal_stability#, center_of_mass
+
+    def computeNoveltyScore(self, candidate_gesture_descriptors):
+        N = 0
+        diff = np.array(candidate_gesture_descriptors).reshape(1,-1) - np.array(self.gestures_descriptors)[-self.M:,:]
+        data = np.linalg.norm(diff, axis=1).tolist()
+        dd = []
+        div = 0
+        for n in range(1,len(data)):
+            m = len(data) - n
+            dd.append(1/m * data[n])
+            div += 1/m
+        N = np.array(dd).sum() / div 
+        return N
+
+    def computeHedonicValue(self, noveltyScore):
+        return np.tanh(noveltyScore - self.nu) - np.tanh(noveltyScore - (self.nu+1))
 
     def start_midi_listener(self, port_name=None):
         '''Start listening to MIDI controller input'''

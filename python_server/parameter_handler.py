@@ -239,7 +239,7 @@ class ParameterHandler:
                 print(f"Change magnitude: {delta:.4f} (threshold {self.change_threshold})")
                 ### --------
                 ####### CROSSFADE TO DIFFERENTIATE MUSICIAN ACTION AND AGENT RESPONSE #######
-                self.clientJS.send_message("/drawCrossfade", 0)
+                # self.clientJS.send_message("/drawCrossfade", 0)
                 ####### CROSSFADE TO DIFFERENTIATE MUSICIAN ACTION AND AGENT RESPONSE #######
                 ### --------
             #     if delta > self.change_threshold:
