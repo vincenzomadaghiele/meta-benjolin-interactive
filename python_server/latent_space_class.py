@@ -3,6 +3,7 @@ from scipy.spatial import KDTree
 from pythonosc import udp_client
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import BlockingOSCUDPServer
+import pandas as pd
 import time
 import threading
 import random
@@ -52,6 +53,10 @@ class LatentSpace():
         self.midi_thread = None
         self.midi_listening = False
         self.latest_move = []
+
+        # open csv files
+        cluster_centers = pd.read_csv('./cluster_centers.csv', header=None).values
+
 
         # Start MIDI listener automatically
         self.start_midi_listener()
@@ -119,9 +124,33 @@ class LatentSpace():
                             dataset = np.load(self.param_handler.data_dir)
                             param_matrix_int = dataset['parameter_matrix'].astype(int)
                             reduced_latent_matrix = dataset['reduced_latent_matrix'].copy()
-                            response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, reverseTime=False)
 
-                            # PLAY RESPONSE
+                            candidate_responses = []
+                            responses_metrics = []
+                            default_beta = 0.1
+                            default_gamma = 0.1
+                            # COMPUTE ALL CANDIDATE RESPONSES
+                            from operator import setitem
+                            from functools import reduce
+                            from itertools import combinations, chain
+                            # This returns an iterator
+                            up_to_m_of_n = lambda n, m: chain.from_iterable(combinations(range(n), i) for i in range(m+1))
+                            up_to_m_of_n_true = lambda n, m: map(lambda inds: reduce(lambda a, ind: setitem(a, ind, True) or a,
+                                                                                    inds, [False] * n),up_to_m_of_n(n, m))
+                            permutations_of_parameters = list(up_to_m_of_n_true(5,2))
+                            for permutation in permutations_of_parameters:
+                                bb = 1 if permutation[3] else default_beta
+                                gg = 1 if permutation[4] else default_gamma
+                                response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, 
+                                                                        mirrorCluster = permutation[0], reverseTime=permutation[1], 
+                                                                        reverseStateTimes=permutation[2], beta=bb, gamma=gg)
+                                candidate_responses.append(response)
+                                responses_metrics.append(self.computeGestureMetrics(response))
+                            # response = self.computeSymmetricGesture(latest_gesture, mirror_plane, reduced_latent_matrix, reverseTime=False)
+
+                            # COMPUTE HEDONIC VALUE FOR EACH CANDIDATE
+
+                            # PLAY SELECTED RESPONSE
                             for state in response: 
                                 if state["type"] == "state":
                                     x, y, z = state["x"], state["y"], state["z"]
@@ -165,33 +194,84 @@ class LatentSpace():
         z_mirror = state["z"] - 2 * mirror_plane[2] * E / n_square
         return x_mirror, y_mirror, z_mirror
     
-    def computeSymmetricGesture(self, gesture, mirror_plane, reduced_latent_matrix, reverseTime=False):
-        mirrorCluster = False # mirror wrt cluster center
-        reverse = False # reverse playback order in time
-        # reverse time duration of states in the trajectory (long states become short and vice versa) 
-        # but total trajectory time is the same
-        reverseStateTimes = False 
-        alpha = 0.1 # scale in space
-        alpha = 1 # scale in space
+    def computeSymmetricGesture(self, 
+                                gesture, 
+                                mirror_plane, 
+                                reduced_latent_matrix, 
+                                mirrorCluster = True,
+                                reverseTime=False, 
+                                reverseStateTimes=False,
+                                beta=1, 
+                                gamma=1):
+        # mirrorCluster = True # mirror wrt cluster center
+        # # reverse time duration of states in the trajectory (long states become short and vice versa) 
+        # # but total trajectory time is the same
+        # reverseStateTimes = False 
+        # beta = 0.1 # scale in space
+        # beta = 1 # scale in space
+        # gamma = 0.1 # scale in time
+        # gamma = 1 # scale in time
         response = []
+        durations = []
+        center_of_mass = np.zeros(3)
+        for state in gesture:
+            if state["type"] == "state":
+                durations.append(state['duration'])
+                center_of_mass += state['duration'] * np.array([state['x'], state['y'], state['z']])
+        durations = np.array(durations)
+        total_gesture_time = durations.sum()
+        min_duration = durations.min()
+        max_duration = durations.max()
+        inverted_durations = [max_duration + min_duration - dur for dur in durations.tolist()]
+        scaleFactor = total_gesture_time / np.array(inverted_durations).sum()
+        center_of_mass /= total_gesture_time
         for state in gesture:
             if state["type"] == "state":
                 # x_mirror, y_mirror, z_mirror = self.computeSymmetricState(state, mirror_plane)
-                if not mirrorCluster:
-                    x_mirror, y_mirror, z_mirror = alpha*-state["x"], alpha*-state["y"],alpha*-state["z"]
+                if mirrorCluster:
+                    x_mirror, y_mirror, z_mirror = beta*(2*center_of_mass[0]-state["x"]), beta*(2*center_of_mass[1]-state["y"]),beta*(2*center_of_mass[2]-state["z"])
                 else:
-                    pass
+                    x_mirror, y_mirror, z_mirror = beta*-state["x"], beta*-state["y"],beta*-state["z"]
+                if reverseStateTimes:
+                    stateTime = (max_duration + min_duration - state['duration']) * scaleFactor
+                else:
+                    stateTime = state['duration']
                 # find array index
                 distances = np.linalg.norm(reduced_latent_matrix - np.array([x_mirror, y_mirror, z_mirror]).reshape(1,-1), axis=1)
                 selected_index = np.argmin(distances)
                 x_mirror, y_mirror, z_mirror = reduced_latent_matrix[selected_index]
                 print(f"Closest match at index {selected_index}")
-                response.append({"type":"state","x": x_mirror, "y":y_mirror, "z":z_mirror, "arrayIndex":int(selected_index), "duration":state['duration']})
+                response.append({"type":"state","x": x_mirror, "y":y_mirror, "z":z_mirror, "arrayIndex":int(selected_index), "duration":gamma*stateTime})
             # else:
             #     response.append(state)
-            if reverse:
+            if reverseTime: # reverse playback order in time
                 response = list(reversed(response))
         return response
+
+    def computeGestureMetrics(self, trajectory):
+        timbre_locality = 0
+        timbre_stability = 0
+        temporal_stability = 0
+        center_of_mass = 0
+        points = []
+        durations = []
+        center_of_mass = np.zeros(3)
+        for state in trajectory:
+            if state["type"] == "state":
+                points.append([state['x'], state['y'], state['z']])
+                durations.append(state["duration"])
+                center_of_mass += state['duration'] * np.array([state['x'], state['y'], state['z']])
+        distances = []
+        time_differences = []
+        for i in range(1,len(points)-1):
+            distance_from_prev = np.sqrt((points[i+1][0] - points[i][0])**2 + (points[i+1][1] - points[i][1])**2 + (points[i+1][2] - points[i][2])**2)
+            timbre_locality += distance_from_prev
+            distances.append(distance_from_prev)
+            time_differences.append(durations[i+1]-durations[i])
+        timbre_stability = np.array(distances).sum() / len(distances)
+        center_of_mass /= np.array(durations).sum()
+        temporal_stability = np.array(time_differences).sum() / len(time_differences)
+        return timbre_locality, timbre_stability, temporal_stability, center_of_mass
 
     def start_midi_listener(self, port_name=None):
         '''Start listening to MIDI controller input'''

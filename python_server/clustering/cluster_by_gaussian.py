@@ -2,6 +2,7 @@ import os
 import json
 import argparse
 import numpy as np
+import scipy.stats
 from scipy.spatial import KDTree
 from sklearn.mixture import GaussianMixture
 import matplotlib.cm as cm
@@ -54,6 +55,20 @@ class ClusterByGaussian:
         if best_gmm is None:
             raise RuntimeError("GaussianMixture model selection failed for all k")
         labels = best_gmm.predict(points)
+
+        # find cluster centers
+        centers = np.empty(shape=(gmm.n_components, points.shape[1]))
+        for i in range(gmm.n_components):
+            density = scipy.stats.multivariate_normal(cov=gmm.covariances_[i], mean=gmm.means_[i]).logpdf(points)
+            centers[i, :] = points[np.argmax(density)]
+            print(f'center of cluster {i}: {centers[i,:]}')
+
+        # 6) Write CSV x,y,z,r,g,b
+        with open('./cluster_centers.csv', 'w') as f:
+            f.write("l,x,y,z\n")
+            for i in range(centers.shape[0]):
+                f.write(f"{i},{centers[i,0]},{centers[i,1]},{centers[i,2]}\n")
+
 
         # 3) Log cluster counts
         unique_labels, counts = np.unique(labels, return_counts=True)
@@ -114,9 +129,9 @@ class ClusterByGaussian:
 
         # 6) Write CSV x,y,z,r,g,b
         with open(self.output_csv, 'w') as f:
-            f.write("x,y,z,r,g,b\n")
-            for (xv, yv, zv), (rv, gv, bv) in zip(points, colors):
-                f.write(f"{xv},{yv},{zv},{rv},{gv},{bv}\n")
+            f.write("x,y,z,r,g,b,l\n")
+            for (xv, yv, zv), (rv, gv, bv), (lbl) in zip(points, colors, labels):
+                f.write(f"{xv},{yv},{zv},{rv},{gv},{bv},{lbl}\n")
 
         # 7) Write frontend JS dataset
         js_obj = {
