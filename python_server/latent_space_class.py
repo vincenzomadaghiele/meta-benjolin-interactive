@@ -14,6 +14,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import to_hex
 import json
 import mido
+import traceback
 from clustering.cluster_by_gaussian import ClusterByGaussian
 
 
@@ -97,7 +98,6 @@ class LatentSpace():
                 time.sleep(0.01)  # Small delay to prevent CPU overuse
         except Exception as e:
             print(f"MIDI listener error: {e}")
-            import traceback
             traceback.print_exc()
             self.midi_listening = False
     
@@ -132,23 +132,11 @@ class LatentSpace():
             print(f"Failed to start MIDI listener: {e}")
             return False
     
-    def stop_midi_listener(self):
-        '''Stop listening to MIDI controller'''
-        self.midi_listening = False
-        if self.midi_thread:
-            self.midi_thread.join(timeout=1.0)
-        if self.midi_port:
-            self.midi_port.close()
-        print("MIDI listener stopped")
-
     def start_recording(self):
         self.clientPd.send_message("/startrecording", 0)
     def stop_recording(self):
         self.clientPd.send_message("/stoprecording", 0)
 
-    def get_current_index(self):
-        return self.current_index
-    
     def set_current_point(self, index):
         # Validate index is within bounds
         if index < 0 or index >= len(self.latent):
@@ -176,29 +164,9 @@ class LatentSpace():
         print(f"Dataset reloaded: {len(self.latent)} points, path cache cleared")
     
     def get_index_given_latent(self, latent):
-        distance, index = self.kd_tree.query(latent, k=1)
+        index = self.kd_tree.query(latent, k=1)
         return index
 
-    def pre_uniformize(self):
-        x_ind_sorted = np.argsort(self.latent[:, 0])
-        y_ind_sorted = np.argsort(self.latent[:, 1])
-
-        n = len(self.latent)
-
-        new_x = np.zeros((n))
-        new_x[x_ind_sorted] = np.arange(n)
-        new_y = np.zeros((n))
-        new_y[y_ind_sorted] = np.arange(n)
-
-        if self.dimensionality == 3:
-            z_ind_sorted = np.argsort(self.latent[:, 2])
-            new_z = np.zeros((n))
-            new_z[z_ind_sorted] = np.arange(n)
-            return np.column_stack((new_x, new_y, new_z)) / n
-
-        new_points = np.column_stack((new_x, new_y)) / n
-        return new_points
-    
     def find_next_point(self, a, b, path):
         """
         Finds a point adjacent to a that is in the direction of b, with the least distance in parameter space
@@ -209,7 +177,6 @@ class LatentSpace():
         """
         a_latent, a_param = self.get_point_info(a)
         b_latent, b_param = self.get_point_info(b)
-        param_distance_0 = np.linalg.norm(a_param - b_param)
         latent_distance_0 = np.linalg.norm(a_latent - b_latent)
 
         k = self.neighbors
@@ -219,7 +186,6 @@ class LatentSpace():
         param_space_distances = np.zeros((k))
         latent_space_distances = np.zeros((k))
         cost_values = np.zeros((k))
-        constant = 0.0
 
         for i in range(k):
             index = indices[i]
@@ -445,6 +411,6 @@ if __name__ == "__main__":
     dispatcher.map("/startrecording", handler=cloud.startrecording_handler)
     dispatcher.map("/stoprecording", handler=cloud.stoprecording_handler)
     dispatcher.set_default_handler(handler=cloud.getparameters_handler)
-    cloud.trainDatasetWithColors() # Disable if clustering is not desired
+    #cloud.trainDatasetWithColors() # Disable if clustering is not desired
     print("Set up complete! Start playing the benjolin!")
     server.serve_forever()  # Blocks forever

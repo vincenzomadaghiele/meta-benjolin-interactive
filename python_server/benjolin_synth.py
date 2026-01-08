@@ -31,7 +31,6 @@ class BenjolinSynth:
 		self.config.sample_rate = sample_rate
 		self.startup_synth_parameters = startup_synth_parameters
 		self.is_playing = False
-		self.is_buffer_synth_playing = False  # Track buffer synth separately
 		self.connectGraph()
 
 	def connectGraph(self, parameters=None):
@@ -55,17 +54,10 @@ class BenjolinSynth:
 			p_fade = Line(current_p, new_p, self.synth.fade_time)
 			self.synth.set_input(f"parameter-{i}", p_fade) 
 
-	def resetParameters(self, new_parameters: list):
-		for i, new_p in enumerate(new_parameters):
-			self.synth.set_input(f"parameter-{i}", new_p)
-
 	def resetBufferParameters(self, new_parameters: list):
 		"""Update synthForBuffer parameters independently from self.synth"""
 		for i, new_p in enumerate(new_parameters):
 			self.synthForBuffer.set_input(f"parameter-{i}", new_p) 
-
-	def getInputs(self):
-		return self.synth.inputs
 
 	def play(self, synth_parameters: list):
 		'''Update parameters and start playing'''

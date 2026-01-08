@@ -5,6 +5,8 @@ import os
 import sys
 import time
 import json
+import traceback
+import re
 
 class ParameterHandler:
     def __init__(self, clientJS, latent, synth, encoding_mode=False):
@@ -41,7 +43,7 @@ class ParameterHandler:
             training_dir = os.path.join(os.path.dirname(__file__), 'benjolin_encoder')
             if training_dir not in sys.path:
                 sys.path.insert(0, training_dir)
-            
+
             from benjolin_encoder import BenjolinEncoder
             
             # Initialize trainer with model from benjolin_encoder directory
@@ -58,7 +60,6 @@ class ParameterHandler:
             print(f"Error initializing encoding components: {e}")
             print("Encoding mode will be DISABLED")
             self.encoding_mode = False
-            import traceback
             traceback.print_exc()
 
     def getparameters_handler(self, source: str, *args):
@@ -94,6 +95,51 @@ class ParameterHandler:
 
                 print(f"Processing buffered params after delay: {last_target_params}")
                 self.find_and_send_coordinates(last_target_params)
+
+    def normalize_parameters(self, target_params_int):
+        # Normalize parameters from 0-127 range to 0-1 range (BenjolinPatch expects normalized values)
+        normalized_params = target_params_int / 127.0
+        # Add gain parameter (1.5 for 150% volume - louder but without distortion)
+        synth_params = np.append(normalized_params, 1).tolist()
+        return synth_params
+
+    def findCoordinates(self, target_params_int, reduced_latent_matrix, param_matrix_int):
+        # Find exact match using broadcasting
+        matches = np.all(param_matrix_int == target_params_int[np.newaxis, :], axis=1)
+        print(f"Number of exact matches found: {np.sum(matches)}")
+
+        # Determine selected index (exact match preferred; otherwise closest by distance)
+        if np.any(matches):
+            selected_index = np.where(matches)[0][0]
+            print(f"Exact match found at index {selected_index}")
+            x, y, z = reduced_latent_matrix[selected_index]
+        else:
+            print("No exact match found even after integer conversion")
+            
+            # If training mode is enabled, generate coordinates from actual sound
+            if self.encoding_mode and self.encoder is not None and self.synth is not None:
+                synth_params = self.normalize_parameters(target_params_int)
+                print("Encoding mode: Generating coordinates from synthesized audio")
+                try:
+                    # Render audio with these parameters
+                    audio_buffer = self.synth.render_audio_as_buffer(synth_params, duration_seconds=1.0)
+                    
+                    # Get 3D coordinates from the trainer
+                    x, y, z = self.encoder.get_new_coordinates(audio_buffer)
+                    print(f"Generated coordinates from audio: x={x:.3f}, y={y:.3f}, z={z:.3f}")
+                    
+                    # Add new point to dataset and visualization (safe - lock is released)
+                    selected_index = self._add_new_point_to_dataset(x, y, z, target_params_int)
+                    
+                except Exception as e:
+                    print(f"Error in training mode coordinate generation: {e}")
+                    traceback.print_exc()
+                    # Fall back to closest match
+                    x, y, z = self.find_closest_match(param_matrix_int, target_params_int, reduced_latent_matrix)
+            else:
+                x, y, z = self.find_closest_match(param_matrix_int, target_params_int, reduced_latent_matrix)
+
+        return x, y, z, selected_index
 
     def _calculate_param_change_duration(self):
         """Calculate how long parameters were changing in the buffer.
@@ -138,6 +184,13 @@ class ParameterHandler:
         duration_calculated = max(duration_ms, 0)  # Ensure non-negative
         return duration_calculated if duration_calculated > 0 else 100 
 
+    def find_closest_match(self, param_matrix_int, target_params_int, reduced_latent_matrix):
+        distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
+        selected_index = np.argmin(distances)
+        x, y, z = reduced_latent_matrix[selected_index]
+        print(f"Closest match at index {selected_index}")
+        return x, y, z
+
     def find_and_send_coordinates(self, target_params):
         # Load dataset with lock, then release it
         with self.dataset_lock:
@@ -154,57 +207,8 @@ class ParameterHandler:
             if len(target_params_int) < param_matrix_int.shape[1]:
                 param_matrix_int = param_matrix_int[:, :len(target_params_int)]
 
-        # Find exact match using broadcasting
-        matches = np.all(param_matrix_int == target_params_int[np.newaxis, :], axis=1)
-        print(f"Number of exact matches found: {np.sum(matches)}")
+        x, y, z, selected_index = self.findCoordinates(target_params_int, reduced_latent_matrix, param_matrix_int)
 
-        # Normalize parameters from 0-127 range to 0-1 range (BenjolinPatch expects normalized values)
-        normalized_params = target_params_int / 127.0
-        # Add gain parameter (1.5 for 150% volume - louder but without distortion)
-        synth_params = np.append(normalized_params, 1).tolist()
-
-        # Determine selected index (exact match preferred; otherwise closest by distance)
-        if np.any(matches):
-            selected_index = np.where(matches)[0][0]
-            print(f"Exact match found at index {selected_index}")
-            x, y, z = reduced_latent_matrix[selected_index]
-        else:
-            print("No exact match found even after integer conversion")
-            
-            # If training mode is enabled, generate coordinates from actual sound
-            if self.encoding_mode and self.encoder is not None and self.synth is not None:
-                print("Encoding mode: Generating coordinates from synthesized audio")
-                try:
-                    # Render audio with these parameters
-                    audio_buffer = self.synth.render_audio_as_buffer(synth_params, duration_seconds=1.0)
-                    
-                    # Get 3D coordinates from the trainer
-                    x, y, z = self.encoder.get_new_coordinates(audio_buffer)
-                    print(f"Generated coordinates from audio: x={x:.3f}, y={y:.3f}, z={z:.3f}")
-                    
-                    # Add new point to dataset and visualization (safe - lock is released)
-                    selected_index = self._add_new_point_to_dataset(x, y, z, target_params_int)
-                    
-                except Exception as e:
-                    print(f"Error in training mode coordinate generation: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Fall back to closest match
-                    print("Falling back to closest match in dataset")
-                    distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
-                    selected_index = np.argmin(distances)
-                    x, y, z = reduced_latent_matrix[selected_index]
-                    print(f"Closest match at index {selected_index}")
-            else:
-                # Training mode disabled or not available - use closest match
-                distances = np.linalg.norm(param_matrix_int - target_params_int, axis=1)
-                selected_index = np.argmin(distances)
-                # Manhattan distance alternative:
-                #distances = np.sum(np.abs(param_matrix_int - target_params_int), axis=1)
-                #selected_index = np.argmin(distances)
-                x, y, z = reduced_latent_matrix[selected_index]
-                print(f"Closest match at index {selected_index}")
-        
         print(f"Latent coordinates: x={x}, y={y}, z={z}")
         if selected_index is not None and selected_index >= 0:
             print(f"Parameters of closest point: index {selected_index}")
@@ -245,6 +249,7 @@ class ParameterHandler:
             elapsed_arg = elapsed_prev_sec if elapsed_prev_sec is not None else -1.0
             print(f"prev seconds: {elapsed_arg} index is {selected_index}")
             # 5th argument should be the dataset index for color lookup in the frontend
+            synth_params = self.normalize_parameters(target_params_int)
             self.synth.play(synth_params)
             self.clientJS.send_message("/drawBox", [x, y, z, random.randint(3, 9), int(selected_index), elapsed_arg])
             print(f"Sent drawBox message to Node.js: x={x}, y={y}, z={z}, prev_elapsed={elapsed_arg}")
@@ -303,54 +308,6 @@ class ParameterHandler:
             
         except Exception as e:
             print(f"Error adding point to dataset: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def _update_dataset3d_withcolors_js(self, x, y, z, r, g, b):
-        """Update the dataset3D_withcolors.js file with new coordinate and color."""
-        try:
-            js_file_path = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dataset3D_withcolors.js')
-            
-            # Read existing file
-            with open(js_file_path, 'r') as f:
-                content = f.read()
-            
-            # Find the x, y, z, r, g, b arrays and append new values
-            import re
-            
-            # Add to x array - find last number before closing bracket
-            x_pattern = r'("x":\s*\[[^\]]+)(\])'
-            content = re.sub(x_pattern, f'\\1,\n        {x}\\2', content, count=1)
-            
-            # Add to y array
-            y_pattern = r'("y":\s*\[[^\]]+)(\])'
-            content = re.sub(y_pattern, f'\\1,\n        {y}\\2', content, count=1)
-            
-            # Add to z array
-            z_pattern = r'("z":\s*\[[^\]]+)(\])'
-            content = re.sub(z_pattern, f'\\1,\n        {z}\\2', content, count=1)
-            
-            # Add to r array
-            r_pattern = r'("r":\s*\[[^\]]+)(\])'
-            content = re.sub(r_pattern, f'\\1,\n        {r}\\2', content, count=1)
-            
-            # Add to g array
-            g_pattern = r'("g":\s*\[[^\]]+)(\])'
-            content = re.sub(g_pattern, f'\\1,\n        {g}\\2', content, count=1)
-            
-            # Add to b array
-            b_pattern = r'("b":\s*\[[^\]]+)(\])'
-            content = re.sub(b_pattern, f'\\1,\n        {b}\\2', content, count=1)
-            
-            # Write back
-            with open(js_file_path, 'w') as f:
-                f.write(content)
-            
-            print(f"Updated dataset3D_withcolors.js with new point (red color)")
-            
-        except Exception as e:
-            print(f"Error updating dataset3D_withcolors.js: {e}")
-            import traceback
             traceback.print_exc()
     
     def _send_new_point_to_frontend(self, x, y, z, parameters):

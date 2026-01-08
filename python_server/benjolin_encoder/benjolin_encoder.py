@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dists
-from torch.utils.data import SubsetRandomSampler
 import numpy as np
 import pickle
 import os
 from sklearn.decomposition import PCA
+import torchaudio
 from dataloader import get_features
 
 
@@ -228,7 +228,6 @@ class BenjolinEncoder:
         sample_rate = 44100
         
         # Extract MFCCs (13 coefficients)
-        import torchaudio
         MFCC = torchaudio.transforms.MFCC(
             sample_rate=sample_rate,
             n_mfcc=13,
